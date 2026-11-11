@@ -1,0 +1,19 @@
+# Keep the build context small and the image free of local state.
+# (tests/ stays in: the type check that runs during `next build` covers the test files.)
+.git
+.github
+node_modules
+.next
+coverage
+tests/output
+*.tsbuildinfo
+
+# Never bake local secrets into an image; configuration is injected at run time.
+.env*
+!.env.example
+
+# Not needed to build
+docs
+*.md
+Dockerfile
+.dockerignore

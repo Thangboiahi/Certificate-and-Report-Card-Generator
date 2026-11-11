@@ -3,7 +3,7 @@
 The single place to see what we are building, where we are, what comes next, and what is waiting
 on a decision. Updated at the end of every working session.
 
-**Last updated:** 2026-11-11 (session 1)
+**Last updated:** 2026-11-11 (end of session 1)
 
 Related records: [ARCHITECTURE.md](./ARCHITECTURE.md) (how it works) ·
 [DECISIONS.md](./DECISIONS.md) (why) · [DEVLOG.md](./DEVLOG.md) (history)
@@ -43,16 +43,16 @@ Google Sheet, often with names in a regional language.
 
 Status key: ✅ done and verified · 🟡 in progress · ⬜ not started
 
-| #   | Milestone                 | What it delivers                                                                                                                                                           | Status |
-| --- | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| M0  | **PDF engine foundation** | Template schema, image proxy, generation engine, Web Worker, developer playground, Cloud Run container                                                                     | 🟡     |
-| M1  | **Platform**              | Firebase project wiring, Google Sign-In, Firestore data model and security rules, Cloud Storage, app shell (navigation, themes), CI/CD to Cloud Run                        | ⬜     |
-| M2  | **Template editor**       | Upload a PDF or image as a template, render pages, Tap-to-Place, properties panel, font picker, live preview from the real engine                                          | ⬜     |
-| M3  | **Data intake**           | Google Sheets via Picker, CSV/Excel upload, column mapping, pre-flight checks (missing columns, empty cells, unreachable photos), photos from links / Drive / local folder | ⬜     |
-| M4  | **Generate and deliver**  | Batch run screen (progress, cancel, per-row report), ZIP download, export to Drive, merged print file                                                                      | ⬜     |
-| M5  | **Billing and tiers**     | Razorpay checkout and webhooks, tier limits, GST invoices                                                                                                                  | ⬜     |
-| M6  | **Super Admin**           | Custom-claims roles, user and tier management, usage and revenue metrics                                                                                                   | ⬜     |
-| M7  | **Hardening and launch**  | Google OAuth verification, security review, monitoring, low-end Android testing, privacy policy and terms                                                                  | ⬜     |
+| #   | Milestone                 | What it delivers                                                                                                                                                           | Status                                   |
+| --- | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| M0  | **PDF engine foundation** | Template schema, image proxy, generation engine, Web Worker, developer playground, Cloud Run container                                                                     | ✅ (Docker image still to be built once) |
+| M1  | **Platform**              | Firebase project wiring, Google Sign-In, Firestore data model and security rules, Cloud Storage, app shell (navigation, themes), CI/CD to Cloud Run                        | ⬜                                       |
+| M2  | **Template editor**       | Upload a PDF or image as a template, render pages, Tap-to-Place, properties panel, font picker, live preview from the real engine                                          | ⬜                                       |
+| M3  | **Data intake**           | Google Sheets via Picker, CSV/Excel upload, column mapping, pre-flight checks (missing columns, empty cells, unreachable photos), photos from links / Drive / local folder | ⬜                                       |
+| M4  | **Generate and deliver**  | Batch run screen (progress, cancel, per-row report), ZIP download, export to Drive, merged print file                                                                      | ⬜                                       |
+| M5  | **Billing and tiers**     | Razorpay checkout and webhooks, tier limits, GST invoices                                                                                                                  | ⬜                                       |
+| M6  | **Super Admin**           | Custom-claims roles, user and tier management, usage and revenue metrics                                                                                                   | ⬜                                       |
+| M7  | **Hardening and launch**  | Google OAuth verification, security review, monitoring, low-end Android testing, privacy policy and terms                                                                  | ⬜                                       |
 
 Suggested order after M0: **M1 → M2 → M3 → M4** gives a usable product end to end (free, no
 billing). M5–M7 turn it into a business. Google's OAuth verification (part of M7) takes weeks and
@@ -60,17 +60,17 @@ needs a domain and a privacy policy, so the paperwork should start during M2.
 
 ### M0 in detail (current)
 
-| Item                                                                       | Status |
-| -------------------------------------------------------------------------- | ------ |
-| Project scaffold, tooling, test setup                                      | ✅     |
-| Template schema: interfaces, runtime validation, data bindings             | ✅     |
-| `/api/proxy-image`: SSRF-safe image relay with auth                        | ✅     |
-| Engine maths: page geometry (rotation, crop), text layout, image fitting   | ✅     |
-| Engine fonts and text drawing (Indic shaping, kerning)                     | 🟡     |
-| Engine images (JPG/PNG, EXIF orientation, cover/contain) and QR codes      | 🟡     |
-| Engine orchestration: separate and merged output, progress, cancel, report | 🟡     |
-| Web Worker wrapper (comlink) and developer playground                      | ⬜     |
-| Dockerfile for Cloud Run                                                   | ⬜     |
+| Item                                                                       | Status                |
+| -------------------------------------------------------------------------- | --------------------- |
+| Project scaffold, tooling, test setup                                      | ✅                    |
+| Template schema: interfaces, runtime validation, data bindings             | ✅                    |
+| `/api/proxy-image`: SSRF-safe image relay with auth                        | ✅                    |
+| Engine maths: page geometry (rotation, crop), text layout, image fitting   | ✅                    |
+| Engine fonts and text drawing (Indic shaping, kerning)                     | ✅                    |
+| Engine images (JPG/PNG, EXIF orientation, cover/contain) and QR codes      | ✅                    |
+| Engine orchestration: separate and merged output, progress, cancel, report | ✅                    |
+| Web Worker wrapper (comlink) and developer playground                      | ✅                    |
+| Dockerfile for Cloud Run                                                   | 🟡 written, not built |
 
 ## 4. What is needed from the executive
 

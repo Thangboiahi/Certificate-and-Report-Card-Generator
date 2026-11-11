@@ -25,8 +25,14 @@ text, images and QR codes. Set up durable project records.
 - **Records** — this log, PLAN.md, DECISIONS.md (15 ADRs), CLAUDE.md with the record-keeping
   protocol.
 
-_(The engine's fonts, drawing, orchestration, Worker wrapper, playground and Dockerfile are being
-built in the same session; this entry is completed at the end of it.)_
+- **PDF engine** (`src/lib/pdf-engine`) — shaped text for Indian scripts, wrapping and
+  shrink-to-fit, images (cover/contain/fill, position, EXIF, masks, borders), vector QR codes,
+  multi-page templates incl. rotated/offset pages, `separate` and `merged` output, per-row
+  reports, cancellation, back-pressure.
+- **Web Worker** (`src/workers`) — comlink client/worker, image loader (local / same-origin /
+  proxy), canvas image shrinker and converter.
+- **Playground and e2e** — `/playground`, sample template and photos, `scripts/e2e-playground.mjs`.
+- **Dockerfile** and `.dockerignore` (written, not built — see Open).
 
 ### Experiments and what they showed
 
@@ -60,18 +66,40 @@ defined` inside fontkit's Indic shaper. Loading `regenerator-runtime` first fixe
 - TypeScript 7 and ESLint 10 exist, but the Next.js template still pins TypeScript 5 and ESLint 9.
   We follow the template.
 
+### Things found and fixed along the way
+
+- fontkit crashed on Telugu, Malayalam and Gurmukhi words (empty GPOS mark anchors); patched to
+  skip empty anchors as HarfBuzz does, with a degraded-shaping fallback.
+- pdf-lib's `EncryptedPDFError` breaks `instanceof`, so encrypted templates were reported as
+  unreadable; now detected by message.
+- A photo shown twice in one row was downloaded and embedded twice; now once (documents 238 KB →
+  172 KB in the playground).
+
 ### Verified
 
-- 167 unit tests pass (schema 13, bindings 8, proxy 120, text layout 26).
-- Proxy tests run against a real local HTTP server: redirects to the metadata server, DNS
-  rebinding, IPv4-in-IPv6 disguises, oversized and gzip-bomb bodies, stalled origins, forged
-  tokens.
-- `tsc --noEmit` and `eslint` are clean.
+- 360 tests pass (`npm test`). Engine output is checked with poppler: pixel colours for images,
+  QR modules and backgrounds; word positions for text; all 8 EXIF orientations; 6 page
+  geometries x 2 modes.
+- Nine Indian scripts rendered by the engine match Chromium's rendering of the same fonts
+  (visually, and ink overlap 0.80–0.85 after a ≤3 px shift; remaining difference is
+  anti-aliasing, not placement).
+- `npm run build` succeeds; `/api/proxy-image` is dynamic. `scripts/e2e-playground.mjs` passes
+  against the standalone production server in Chromium: proxy checks over real HTTP (metadata IP
+  and localhost refused; anonymous refused when `K_SERVICE` is set; a public image relayed),
+  6 rows separate, 60 rows merged (252 KB), 300 rows in ~1 s, cancellation, phone viewport with
+  no sideways scroll, no console errors.
+- `tsc --noEmit` and `eslint` clean.
 
-### Open at the time of writing
+### Open
 
-- Engine fonts / drawing / orchestration, Worker, playground, Dockerfile (in progress).
-- The Google Drive direct-download rewrite is unit-tested as a string transformation but has not
-  been exercised against real Drive links (needs sample data — PLAN.md item E7).
-- Docker is not available in the development sandbox, so the image has to be built in CI or on a
-  workstation.
+- **The Docker image has not been built.** An attempt hit Docker Hub's anonymous pull limit
+  (HTTP 429), then, via `mirror.gcr.io`, `npm ci` failed inside the container with a
+  self-signed-certificate error caused by this sandbox's network proxy (not by the Dockerfile).
+  The Dockerfile follows Next's standalone layout and the standalone server is verified, but
+  build it once in CI or on a workstation: `docker build -t document-generator .`
+- Real Firebase ID-token verification is untested (no Firebase project yet; only rejection of
+  bad tokens is tested). Needs PLAN.md E1–E2.
+- Google Drive share-link rewriting is unit-tested only, not against real Drive links (E7).
+- Image shrinking/conversion runs in Chromium only; not tested on Safari or low-end Android (E11).
+- Right-to-left text (Urdu) unsupported; fonts have no fallback for missing characters.
+- Per-user proxy rate limits and App Check not done (B23, B24).
