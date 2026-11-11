@@ -1139,6 +1139,66 @@ describe('image loading during a job', () => {
     );
   });
 
+  it('fetches and embeds a photo once even when a document shows it in two places', async () => {
+    const loader = createFixtureLoader();
+    const sizes: Array<[number, number]> = [];
+    loader.dependencies.processImage = async ({ targetWidth, targetHeight }) => {
+      sizes.push([targetWidth, targetHeight]);
+      return null;
+    };
+    const twice: Placeholder[] = [
+      image({ id: 'front', box: { x: 20, y: 20, width: 144, height: 72 } }),
+      image({ id: 'back', pageIndex: 1, box: { x: 20, y: 20, width: 72, height: 108 } }),
+    ];
+    const once: Placeholder[] = [twice[0]!];
+    const pages = [GREY_PAGE, GREY_PAGE];
+    const templatePdf = await createTemplatePdf(pages);
+    const rows = [{ Photo: photo('portrait.jpg') }];
+
+    const shown = await runEngine({
+      template: createTemplate(pages, twice),
+      templatePdf,
+      rows,
+      loader,
+      options: { imageDpi: 72 },
+    });
+    const single = await runEngine({ template: createTemplate(pages, once), templatePdf, rows });
+
+    expect(shown.loader.requests).toEqual([photo('portrait.jpg')]);
+    // One request, sized for the larger box in each direction.
+    expect(sizes).toEqual([[144, 108]]);
+    // The second placement adds drawing instructions, not a second copy of the picture.
+    const extra = shown.documents[0]!.bytes.byteLength - single.documents[0]!.bytes.byteLength;
+    expect(extra).toBeLessThan(fixtureImage('portrait.jpg').byteLength / 4);
+  });
+
+  it('reports a failed photo for each place it was meant to appear', async () => {
+    const run = await runEngine({
+      template: createTemplate(
+        [GREY_PAGE],
+        [
+          image({
+            id: 'front',
+            label: 'Photo (front)',
+            box: { x: 20, y: 20, width: 60, height: 60 },
+          }),
+          image({
+            id: 'back',
+            label: 'Photo (back)',
+            box: { x: 120, y: 20, width: 60, height: 60 },
+          }),
+        ],
+      ),
+      templatePdf: await createTemplatePdf([GREY_PAGE]),
+      rows: [{ Photo: photo('missing.jpg') }],
+    });
+    expect(run.loader.requests).toHaveLength(1);
+    expect(run.result.problemRows[0]!.warnings.map((warning) => warning.message)).toEqual([
+      '"Photo (front)": The image host answered with HTTP 404.',
+      '"Photo (back)": The image host answered with HTTP 404.',
+    ]);
+  });
+
   it('respects the download concurrency limit while prefetching ahead', async () => {
     const loader = createFixtureLoader({ delayMs: 3 });
     // A distinct link per row, so nothing is served from the cache.

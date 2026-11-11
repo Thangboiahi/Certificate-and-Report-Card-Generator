@@ -16,13 +16,7 @@ import { PDFDocument, type PDFEmbeddedPage, type PDFPage } from 'pdf-lib';
 
 import { renderTokens, resolveBinding } from '@/lib/template/bindings';
 import { validateTemplate } from '@/lib/template/schema';
-import type {
-  DataRow,
-  ImagePlaceholder,
-  Placeholder,
-  TemplateDefinition,
-  TemplatePage,
-} from '@/lib/template/types';
+import type { DataRow, Placeholder, TemplateDefinition, TemplatePage } from '@/lib/template/types';
 
 import { drawImage, embedImage, type EmbeddedImage } from './draw-image';
 import { createQrMatrix, drawQr } from './draw-qr';
@@ -301,13 +295,27 @@ class Job {
     this.plans.delete(rowIndex);
   }
 
-  private imageRequest(placeholder: ImagePlaceholder, source: string): ImageRequest {
+  /**
+   * The images a row needs: one request per distinct source, sized for the LARGEST box that
+   * source appears in. A photo shown on both the certificate and the report card is therefore
+   * downloaded, shrunk and embedded once, and both placeholders draw the same embedded image.
+   */
+  private imageRequests(items: readonly PlannedItem[]): Map<string, ImageRequest> {
     const pixels = (points: number) => Math.max(1, Math.ceil((points / 72) * this.imageDpi));
-    return {
-      source,
-      targetWidth: pixels(placeholder.box.width),
-      targetHeight: pixels(placeholder.box.height),
-    };
+    const requests = new Map<string, ImageRequest>();
+
+    for (const { placeholder, value } of items) {
+      if (placeholder.type !== 'image') continue;
+      const width = pixels(placeholder.box.width);
+      const height = pixels(placeholder.box.height);
+      const existing = requests.get(value);
+      requests.set(value, {
+        source: value,
+        targetWidth: Math.max(width, existing?.targetWidth ?? 0),
+        targetHeight: Math.max(height, existing?.targetHeight ?? 0),
+      });
+    }
+    return requests;
   }
 
   /** Starts downloading the images of the next few rows while the current one is being built. */
@@ -316,10 +324,7 @@ class Job {
     for (let ahead = Math.max(this.prefetchedThrough, rowIndex) + 1; ahead <= through; ahead++) {
       const plan = this.plan(ahead);
       if ('failure' in plan) continue;
-      for (const { placeholder, value } of plan.items) {
-        if (placeholder.type === 'image')
-          this.images.prefetch(this.imageRequest(placeholder, value));
-      }
+      for (const request of this.imageRequests(plan.items).values()) this.images.prefetch(request);
     }
     this.prefetchedThrough = Math.max(this.prefetchedThrough, through);
   }
@@ -335,21 +340,23 @@ class Job {
     });
 
     // Start every download of the row at once; the store limits how many actually run.
-    const loading = items.map(({ placeholder, value }) => {
-      if (placeholder.type !== 'image') return null;
-      const request = this.imageRequest(placeholder, value);
+    const loading = new Map<string, Promise<{ embedded: EmbeddedImage } | { error: unknown }>>();
+    for (const [source, request] of this.imageRequests(items)) {
       const key = this.images.keyOf(request);
-      return this.images
-        .get(request)
-        .then((prepared) => session.image(key, prepared))
-        .then(
-          (embedded) => ({ embedded }),
-          (error: unknown) => ({ error }),
-        );
-    });
+      loading.set(
+        source,
+        this.images
+          .get(request)
+          .then((prepared) => session.image(key, prepared))
+          .then(
+            (embedded) => ({ embedded }),
+            (error: unknown) => ({ error }),
+          ),
+      );
+    }
 
     const steps: DrawStep[] = [];
-    for (const [index, { placeholder, value }] of items.entries()) {
+    for (const { placeholder, value } of items) {
       switch (placeholder.type) {
         case 'text': {
           const font = await session.font(this.fonts.get(placeholder.style.fontId));
@@ -366,7 +373,7 @@ class Job {
         }
 
         case 'image': {
-          const outcome = await (loading[index] as NonNullable<(typeof loading)[number]>);
+          const outcome = await (loading.get(value) as NonNullable<ReturnType<typeof loading.get>>);
           if ('error' in outcome) {
             const problem =
               outcome.error instanceof ImageError
