@@ -106,7 +106,7 @@ abstract class CachingFace {
 // Standard (built-in) fonts
 // ───────────────────────────────────────────────────────────────────────────────────────────────
 
-const NO_BREAK_SPACE = ' ';
+const NO_BREAK_SPACE = '\u00A0';
 /** Drawn in place of a character the font cannot encode. */
 const REPLACEMENT = '?';
 

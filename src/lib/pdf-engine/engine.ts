@@ -12,7 +12,7 @@
  * Two output modes share those steps and differ only in where pages come from — see
  * `generateSeparate` and `generateMerged`, and docs/DECISIONS.md (ADR-009).
  */
-import { EncryptedPDFError, PDFDocument, type PDFEmbeddedPage, type PDFPage } from 'pdf-lib';
+import { PDFDocument, type PDFEmbeddedPage, type PDFPage } from 'pdf-lib';
 
 import { renderTokens, resolveBinding } from '@/lib/template/bindings';
 import { validateTemplate } from '@/lib/template/schema';
@@ -73,7 +73,9 @@ async function loadPdf(bytes: Uint8Array): Promise<PDFDocument> {
     // `updateMetadata: false` leaves the customer's document properties as they were.
     return await PDFDocument.load(bytes, { updateMetadata: false });
   } catch (cause) {
-    if (cause instanceof EncryptedPDFError) {
+    // pdf-lib's error classes are compiled in a way that breaks `instanceof`, so the encrypted
+    // case can only be recognised by its message.
+    if (cause instanceof Error && /\bencrypted\b/i.test(cause.message)) {
       throw new EngineError(
         'TEMPLATE_PDF_ENCRYPTED',
         'The template PDF is password-protected. Remove the password and upload it again.',

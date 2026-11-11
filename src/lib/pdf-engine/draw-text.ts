@@ -58,7 +58,7 @@ export function prepareText(value: string, textTransform: TextTransform = 'none'
       return text.toLowerCase();
     case 'capitalize':
       return text.replace(
-        /(^|[\s ])(\p{L})/gu,
+        /(^|[\s\u00A0])(\p{L})/gu,
         (_match, before: string, letter: string) => before + letter.toUpperCase(),
       );
     case 'none':

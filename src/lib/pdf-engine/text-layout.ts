@@ -84,7 +84,7 @@ export function splitGraphemes(text: string): string[] {
 /**
  * Splits text into paragraphs (at line breaks) and words (at spaces and tabs). Runs of spaces
  * collapse; blank lines in the middle are kept as empty paragraphs; a non-breaking space stays
- * inside its word, which is how authors forbid a break ("Dr. Rao").
+ * inside its word, which is how authors forbid a break ("Dr.\u00A0Rao").
  */
 export function splitIntoParagraphs(text: string): string[][] {
   const paragraphs = text.split(/\r\n|\r|\n/).map((line) => line.split(/[ \t]+/).filter(Boolean));

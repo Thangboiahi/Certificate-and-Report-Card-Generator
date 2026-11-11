@@ -55,6 +55,8 @@ export interface TemplatePageSpec {
   origin?: { x: number; y: number };
   /** Leave the page without any content stream. */
   blank?: boolean;
+  /** A JPEG drawn across the whole page, like the artwork of a real certificate. */
+  artwork?: Uint8Array;
 }
 
 /** Light grey: easy to tell apart from white paper and from anything a test draws. */
@@ -75,7 +77,11 @@ export async function createTemplatePdf(pages: readonly TemplatePageSpec[]): Pro
       page.setCropBox(x, y, spec.width, spec.height);
     }
     if (spec.rotate) page.setRotation(degrees(spec.rotate));
-    if (!spec.blank) {
+    if (spec.artwork) {
+      const artwork = await document.embedJpg(spec.artwork);
+      page.drawImage(artwork, { x, y, width: spec.width, height: spec.height });
+    }
+    if (!spec.blank && !spec.artwork) {
       const grey = BACKGROUND_GREY[0] / 255;
       page.drawRectangle({
         x,
@@ -182,7 +188,8 @@ export function createFixtureLoader(options: { delayMs?: number } = {}): Fixture
         try {
           if (options.delayMs) await new Promise((resolve) => setTimeout(resolve, options.delayMs));
           if (signal?.aborted) throw Object.assign(new Error('Aborted'), { name: 'AbortError' });
-          const name = /^https:\/\/img\.test\/([\w.-]+)$/.exec(source)?.[1];
+          // A query string is ignored, so tests can make distinct links to the same file.
+          const name = /^https:\/\/img\.test\/([\w.-]+)(\?.*)?$/.exec(source)?.[1];
           if (!name) throw new Error('The image host answered with HTTP 404.');
           try {
             return fixtureImage(name);

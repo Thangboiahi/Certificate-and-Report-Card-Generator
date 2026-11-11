@@ -42,7 +42,7 @@ describe('splitIntoParagraphs', () => {
   });
 
   it('keeps a non-breaking space inside its word', () => {
-    expect(splitIntoParagraphs('Dr. Rao MBBS')).toEqual([['Dr. Rao', 'MBBS']]);
+    expect(splitIntoParagraphs('Dr.\u00A0Rao MBBS')).toEqual([['Dr.\u00A0Rao', 'MBBS']]);
   });
 
   it('returns nothing for blank text', () => {
