@@ -1,0 +1,9 @@
+.next
+node_modules
+coverage
+package-lock.json
+next-env.d.ts
+tests/fixtures
+tests/output
+# Written and re-added by `next dev`; leave it exactly as Next.js generates it.
+AGENTS.md

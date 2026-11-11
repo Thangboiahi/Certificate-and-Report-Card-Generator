@@ -1,0 +1,48 @@
+{
+  "name": "certificate-and-report-card-generator",
+  "version": "0.1.0",
+  "description": "Bulk document, card, certificate and report generation SaaS (browser-side PDF engine).",
+  "private": true,
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "typecheck": "next typegen && tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "verify": "npm run format:check && npm run lint && npm run typecheck && npm run test && npm run build"
+  },
+  "dependencies": {
+    "@pdf-lib/fontkit": "1.1.1",
+    "comlink": "4.4.2",
+    "firebase-admin": "14.5.0",
+    "next": "16.4.6",
+    "pdf-lib": "1.17.1",
+    "qrcode-generator": "2.0.4",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "regenerator-runtime": "0.14.1",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@expo-google-fonts/noto-sans-bengali": "^0.4.4",
+    "@expo-google-fonts/noto-sans-devanagari": "^0.4.2",
+    "@expo-google-fonts/noto-sans-tamil": "^0.4.3",
+    "@tailwindcss/turbopack": "4.3.3",
+    "@types/node": "^22.20.5",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.4.6",
+    "prettier": "3.9.10",
+    "tailwindcss": "4.3.3",
+    "typescript": "^5",
+    "vitest": "5.1.0"
+  }
+}
