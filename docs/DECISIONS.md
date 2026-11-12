@@ -28,12 +28,15 @@ when to revisit it. This is the file to open when someone asks "why is it built 
 | 012 | QR codes drawn as vector squares                                                       | Accepted |
 | 013 | The engine is environment-agnostic; the Worker is a thin adapter                       | Accepted |
 | 014 | Project memory lives in `docs/` and is updated every session                           | Accepted |
-| 015 | Google access via `drive.file` + Google Picker only                                    | Proposed |
+| 015 | Google access via `drive.file` + Google Picker only                                    | Accepted |
 | 016 | Elevated roles as Firebase custom claims: one role, one institution                    | Accepted |
 | 017 | Sessions: Firebase session cookies, verified in the proxy and again in server code     | Accepted |
 | 018 | Firestore rules model for institutions, templates and vault items                      | Accepted |
 | 019 | Security is tested against Firebase emulators; emulators can never be on in production | Accepted |
 | 020 | Upload gateway: shadcn/ui primitives copied in; compression on the main thread         | Accepted |
+| 021 | Batch output: streamed ZIP of Blobs; the image proxy stays same-origin (no CORS)       | Accepted |
+| 022 | Tap-to-Place editor: pdf.js to display, percent on screen, points in the store         | Accepted |
+| 023 | Workspace toggle: one route per workspace; the tabs follow the address                 | Accepted |
 
 ---
 
@@ -638,3 +641,78 @@ implemented by the engine's shrink-to-fit (ADR-007) with shaped widths; pdf-lib'
 **Consequences.** Separate-file batches run at ~40 rows/s on the development machine (each PDF is
 the full template saved again); expect several times slower on a phone (~4–6 minutes for 2,500).
 Merged output is ~7× faster and smaller when per-person files are not required.
+
+---
+
+## ADR-022 — Tap-to-Place editor: pdf.js to display, percent on screen, points in the store
+
+**Date:** 2026-11-12 · **Status:** Accepted
+
+**Context.** Phase 4 asked for a mobile editor that renders the PDF background, places fields as
+absolutely positioned `div`s using percentages, and keeps coordinates exact for the PDF Web
+Worker.
+
+**Decision.**
+
+- **Units.** On screen everything is a percentage of the rendered page (`left`, `top`, `width`,
+  `height`), so a field sits on the same spot of the artwork at any screen width. The store
+  (`src/store/templateStore.ts`, Zustand) keeps the template exactly as the worker consumes it — PDF
+  points from the top-left of the displayed page (ADR-003) — and every action converts once
+  (`src/lib/editor/coordinates.ts`). Stored values are clamped to the page and rounded to 1/100 pt
+  (0.0035 mm) so repeated conversions leave no float tails. `activeTemplate` goes to
+  `generatePdfBatch` unchanged; nothing else converts.
+- **Font size on screen** is `fontSize / pageWidth × 100` `cqw` of the page element (a CSS size
+  container), so the preview is at true scale without measuring in JavaScript.
+- **Background rendering: pdf.js** (`pdfjs-dist` 6.4.299, pinned). pdf-lib cannot rasterise, and
+  phones' built-in PDF viewers cannot be overlaid. pdf.js is loaded only by the editor (129 KB
+  gzipped) and parses in its own worker (363 KB gzipped, `src/workers/pdfjs.worker.ts`). At scale
+  1 its viewport is the displayed page in points, so the editor warns when the file does not
+  match the template's recorded page sizes. Canvas resolution follows the device pixel ratio,
+  capped at 3× and 4,096 px per side for phone memory.
+- **Interaction.** Tap selects; dragging moves; with a field selected, tapping its page centres
+  the field there (the "tap-to-place" gesture); arrow keys nudge 1 pt (Shift 10 pt). On touch
+  screens only the **selected** field is draggable — otherwise a swipe that happens to start on a
+  field would move it instead of scrolling. This rule is enforced in code, not left to
+  `touch-action`, because browsers do not always hand such swipes to scrolling.
+- **Property bar**: a non-modal Framer Motion bottom sheet (`framer-motion` 14.6.0), so another
+  field can be tapped behind it. D-pad buttons repeat while held (400 ms, then every 60 ms); steps
+  1 pt and 10 pt; font size −/+ and a slider. When the size goes below the shrink-to-fit minimum,
+  the minimum follows (the schema requires `minFontSize ≤ fontSize`). Swipe the handle down,
+  press Escape or the close button to dismiss. Animations respect "reduce motion".
+- The preview is HTML text: position, box, size, colour and alignment are exact, but
+  shrink-to-fit, Indic shaping and line breaks are the engine's and may differ slightly. The
+  editor's "Test PDF" button generates the previewed row in the real worker.
+
+**Why percentages are not stored** (they were considered in ADR-003): font sizes and borders would
+still need points, and a template would be meaningless without its page size.
+
+**Verified.** Unit tests round-trip every whole-point position through percent and back exactly;
+a store → engine → poppler test checks edited positions on a plain and a `/Rotate 90` page;
+`scripts/e2e-editor.mjs` drives the editor on a touch phone and a desktop and reads the worker's
+PDF back with `pdftotext -bbox` (the name prints inside the edited box, centred within 1.5 pt).
+
+**Revisit when** templates need many pages (render only visible pages), resizing handles are
+added, or field rotation becomes editable (clamping currently ignores rotation).
+
+---
+
+## ADR-023 — Workspace toggle: one route per workspace; the tabs follow the address
+
+**Date:** 2026-11-12 · **Status:** Accepted
+
+**Decision.** "My Digital Vault" (`/dashboard/vault`) and "Issue Credentials"
+(`/dashboard/issue`) stay separate routes, each with its own server-side access check (ADR-017).
+`WorkspaceToggle` is shadcn/ui Tabs (`@radix-ui/react-tabs` 1.2.1, copied in as
+`src/components/ui/tabs.tsx`) whose value is derived from the path; choosing a tab navigates, with
+an optimistic highlight (`useOptimistic`) and a Framer Motion sliding pill. The current page is
+rendered as the active tab's panel. Both pages share a `(workspace)` route-group layout, so URLs
+did not change. `/dashboard/issue` has an explicit `signed-in` rule: any signed-in,
+non-anonymous person may be a Micro-Issuer.
+
+**Why not two client-side panels on one page.** Each workspace will load different data with
+different permissions; separate routes keep links, Back and server-side checks working, and do
+not load the issuer's tools for someone only opening their vault.
+
+**Consequences.** Institution staff and admins also see both workspaces (their institution
+dashboard is separate). Whether institution members should issue personally is a product
+question (PLAN Q4).

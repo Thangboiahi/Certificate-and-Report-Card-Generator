@@ -52,6 +52,7 @@ them.
 | `scripts/e2e-auth.mjs`            | Auth end to end on the production build (see the file header)           |
 | `node scripts/e2e-batch.mjs`      | 2,500-row ZIP batch in Chromium with worker heap sampling (after build) |
 | `node scripts/e2e-uploads.mjs`    | Upload gateway in Chromium (phone and desktop)                          |
+| `node scripts/e2e-editor.mjs`     | Tap-to-Place editor in Chromium, down to the worker's PDF positions     |
 
 ## Rules of the codebase
 
@@ -69,7 +70,9 @@ them.
   rendering of the same font (ADR-007). `tests/output/` holds the rendered pages after a test run.
 - Next.js 16 specifics: no `runtime` / `dynamic` / `revalidate` exports; API routes that must run
   per request start with `await connection()` (ADR-002).
-- Geometry is always in PDF points from the top-left of the displayed page (ADR-003).
+- Geometry is always in PDF points from the top-left of the displayed page (ADR-003). The editor
+  shows percentages, but only `src/store/templateStore.ts` converts; never store percentages
+  (ADR-022).
 - **Every protected page, route handler and server action re-checks access** with
   `requireRouteAccess` / `authorize` from `src/lib/auth/session.ts`; the proxy is the first gate,
   not the only one (ADR-017). New protected areas get a rule in `ROUTE_RULES`.

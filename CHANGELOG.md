@@ -8,9 +8,11 @@ All notable changes. Newest first. Details and reasoning: `docs/DEVLOG.md`, `doc
 
 - Roadmap replaced by the 9-phase B2B2C plan; ADR-015 accepted; local-emulator development until a live project exists.
 - `TemplateRecord.ownerId` is now `ownerUid`, with `institutionId` and server timestamps.
+- `/dashboard/vault` moved into the `(workspace)` route group (same URL) and is titled "My Digital Vault".
 
 ### Added
 
+- Phase 4: Tap-to-Place editor at `/editor` (`MobileEditor` with pdf.js backgrounds, drag and tap-to-place; `PropertyBar` bottom sheet with D-pad and font size; Zustand `templateStore` in PDF points); `WorkspaceToggle` between "My Digital Vault" and "Issue Credentials"; guarded `/dashboard/issue`.
 - Phase 3: `generatePdfBatch` returns a single ZIP of PDFs (streamed, memory-flat to 2,500 rows); worker at `src/workers/pdf.worker.ts`, client at `src/lib/pdfEngine.ts`; image proxy accepts the session cookie.
 - Phase 2 upload gateway: `UniversalUploadZone`, `ImageCropModal` (crop + ≤ 200 KB compression), `CsvPreviewModal` (5-row preview, required-column check), shadcn Dialog.
 - V6 Phase 1, roles and access control: role types, custom-claims management, session cookies

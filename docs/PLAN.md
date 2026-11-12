@@ -3,7 +3,7 @@
 The single place to see what we are building, where we are, what comes next, and what is waiting
 on a decision. Updated at the end of every working session.
 
-**Last updated:** 2026-11-12 (session 3 — administrative update)
+**Last updated:** 2026-11-12 (session 6 — Phase 4, canvas UI and workspace toggle)
 
 Related records: [ARCHITECTURE.md](./ARCHITECTURE.md) (how it works) ·
 [DECISIONS.md](./DECISIONS.md) (why) · [DEVLOG.md](./DEVLOG.md) (history)
@@ -63,9 +63,10 @@ Status key: ✅ done and verified · 🟡 in progress · ⬜ not started
 | 1     | RBAC & Foundation                              | 🟡 (login page, super-admin seed open) |
 | 2     | Universal Uploader & Image Editor              | ✅                                     |
 | 3     | Core PDF Engine (Web Worker, ZIP, image proxy) | ✅                                     |
-| 4–9   | To be briefed                                  | ⬜                                     |
+| 4     | Canvas UI & Workspace Toggles                  | ✅ (real-phone check open)             |
+| 5–9   | To be briefed                                  | ⬜                                     |
 
-### Phase 1 — RBAC & Foundation (current)
+### Phase 1 — RBAC & Foundation (two items open)
 
 | Item                                                                                         | Status |
 | -------------------------------------------------------------------------------------------- | ------ |
@@ -100,6 +101,23 @@ Every upload passes a client-side Preview ➔ Crop/Audit ➔ Confirm gateway.
 | 2,500-row batch verified in Chromium; worker heap stays flat                                          | ✅     |
 | Measured on a real mid-range Android phone                                                            | ⬜     |
 
+### Phase 4 — Canvas UI & Workspace Toggles
+
+The "Tap-to-Place" editor and the toggle between a person's vault and their Micro-Issuer tools.
+Decisions in ADR-022 and ADR-023.
+
+| Item                                                                                                                                                   | Status          |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------- |
+| `src/store/templateStore.ts` (Zustand): `activeTemplate`, `selectedPlaceholderId`, `dataRows`, `updatePlaceholderCoords(id, x%, y%)`, nudge, font size | ✅              |
+| `src/components/canvas/MobileEditor.tsx`: pdf.js background, percent-positioned fields, drag, tap-to-place                                             | ✅              |
+| `src/components/canvas/PropertyBar.tsx`: Framer Motion bottom sheet, D-pad nudge (1/10 pt), font size                                                  | ✅              |
+| `src/components/dashboard/WorkspaceToggle.tsx`: "My Digital Vault" ⇄ "Issue Credentials" (shadcn Tabs)                                                 | ✅              |
+| `/editor` (sample template, Test PDF via the worker), `/dashboard/issue` (guarded issuer workspace)                                                    | ✅              |
+| Positions on screen = positions printed by the worker (poppler-checked, plain and rotated pages)                                                       | ✅              |
+| Checked on a real mid-range Android phone                                                                                                              | ⬜              |
+| Editing a customer's own uploaded template and saving it to Firestore                                                                                  | ⬜ later phases |
+| Resize handles, adding/removing fields, undo                                                                                                           | ⬜ not briefed  |
+
 ### Foundation already built (before the phase plan)
 
 Available to every phase; verified in sessions 1–2:
@@ -125,7 +143,7 @@ Available to every phase; verified in sessions 1–2:
 
 | #   | Item                                                                               | Needed when                    |
 | --- | ---------------------------------------------------------------------------------- | ------------------------------ |
-| P   | Briefs for Phases 2–9                                                              | Before each phase              |
+| P   | Briefs for Phases 5–9                                                              | Before each phase              |
 | E3  | Region — recommended **asia-south1 (Mumbai)**; Firestore's region is permanent     | When a live project is created |
 | E4  | Deployment access (you run commands, or a deploy service account / GitHub Actions) | When going live                |
 | E5  | Product name and domain                                                            | OAuth consent screen, launch   |
@@ -198,6 +216,7 @@ phase.
 | R8  | **Encrypted or unusual template PDFs** cannot be opened.                                         | Rejected with a clear message. Measure how often it happens.                                                                                                                                                                                        |
 | R9  | **Proxy cost and abuse.**                                                                        | Authenticated only; limits on size and time. Rate limiting and quotas come with tiers (B23).                                                                                                                                                        |
 | Q3  | Should issuing a credential always spend institution credits?                                    | If yes, issuance must move to a server route that debits credits in a transaction, and browser writes to `vault_items` be closed (ADR-018). Needed before the billing phase.                                                                        |
+| Q4  | Should institution staff and admins also issue credentials personally (Micro-Issuer workspace)?  | Today every signed-in person sees both workspaces (ADR-023). Decide with the institution phase.                                                                                                                                                     |
 | Q1  | Should free-tier documents carry a watermark?                                                    | Open — pricing decision (E12).                                                                                                                                                                                                                      |
 | Q2  | Is a desktop-first power-user mode needed alongside mobile-first?                                | Open — depends on who the first customers are.                                                                                                                                                                                                      |
 

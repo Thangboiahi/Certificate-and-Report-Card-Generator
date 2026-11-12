@@ -1,6 +1,6 @@
 # Architecture
 
-How the system works **today** (end of session 2). Reasons for the choices are in
+How the system works **today** (end of session 6, Phase 4). Reasons for the choices are in
 [DECISIONS.md](./DECISIONS.md); status and roadmap are in [PLAN.md](./PLAN.md).
 
 ## Overview
@@ -20,8 +20,8 @@ How the system works **today** (end of session 2). Reasons for the choices are i
 ```
 
 Documents are generated in the browser. The server only authenticates, serves the app and relays
-images that browsers cannot fetch themselves (CORS). Firebase, Firestore, Storage, Sheets, Drive
-and Razorpay are **not wired yet** (milestones M1–M6).
+images that browsers cannot fetch themselves (CORS). Firebase Auth and Firestore rules run against
+the local emulators; live Firebase, Storage, Sheets, Drive and Razorpay are **not wired yet**.
 
 ## Code map
 
@@ -38,6 +38,12 @@ and Razorpay are **not wired yet** (milestones M1–M6).
 | `src/app/api/auth/session/`             | Creates / clears the session cookie                                                           |
 | `firebase/`, `firebase.json`            | Firestore security rules and their emulator tests                                             |
 | `src/components/ui/`, `src/lib/utils/`  | Upload gateway (Phase 2): dropzone, crop and CSV preview modals, image and CSV helpers        |
+| `src/store/templateStore.ts`            | Editor state (Zustand): active template in points, selection, preview rows (Phase 4)          |
+| `src/lib/editor/`                       | Percent ↔ point conversion, pdf.js page display, CSS preview of fields                        |
+| `src/components/canvas/`                | Tap-to-Place canvas (`MobileEditor`) and its bottom sheet (`PropertyBar`)                     |
+| `src/components/dashboard/`             | `WorkspaceToggle`: vault ⇄ issuer workspaces                                                  |
+| `src/app/editor/`                       | The editor screen (sample template until template upload is wired)                            |
+| `src/app/dashboard/(workspace)/`        | Vault and issuer pages sharing the toggle layout                                              |
 | `src/app/playground/`                   | Developer harness that runs the whole stack on a sample job                                   |
 | `tests/`, `scripts/`, `public/samples/` | Test support and fixtures, e2e script and asset generators, sample template and photos        |
 
@@ -126,6 +132,7 @@ pages / route handlers / server actions ── requireRouteAccess() / authorize(
 | `/admin/*`                 | super_admin                       |
 | `/dashboard/institution/*` | inst_admin, inst_staff            |
 | `/dashboard/vault/*`       | any signed-in, non-anonymous user |
+| `/dashboard/issue/*`       | any signed-in, non-anonymous user |
 | `/dashboard/*` (other)     | any signed-in user (fail closed)  |
 | `/editor`                  | everyone, including guests        |
 
@@ -140,6 +147,41 @@ pages / route handlers / server actions ── requireRouteAccess() / authorize(
   `firebase deploy --only firestore:rules` (config in `firebase.json`).
 - Environment: `FIREBASE_PROJECT_ID` (required), `APP_ORIGIN` (optional, public origin for the
   session route's same-origin check behind a proxy).
+
+## Tap-to-Place editor (Phase 4)
+
+```
+templateStore (Zustand) ── activeTemplate in POINTS ──────────────► generatePdfBatch (worker)
+   ▲  updatePlaceholderCoords(id, x%, y%) · nudgePlaceholder(id, dx pt, dy pt) · setFontSize
+   │
+MobileEditor ── per page: <div aspect-ratio=w/h, container-type=inline-size>
+   │              ├ <canvas> ← pdf.js (own worker) renders the background
+   │              └ <button> per field: left/top/width/height in %, font-size in cqw
+   └ PropertyBar (Framer Motion bottom sheet): D-pad 1/10 pt, font size, swipe to close
+```
+
+- The store is the single place that converts: percent of the field's own page → points,
+  clamped to the page, rounded to 1/100 pt (`src/lib/editor/coordinates.ts`). Rendering converts
+  back (`boxToPercent`). Edits replace only the touched placeholder object; canvas items are
+  memoised on it.
+- Gestures: tap selects; drag moves (touch: selected field only, so swipes scroll); tapping the
+  page with a field selected centres it there; arrow keys nudge. Drag deltas are pixels divided
+  by the page's on-screen width.
+- pdf.js is loaded on first use (`src/lib/editor/pdf-preview.ts`) and parses in
+  `src/workers/pdfjs.worker.ts`. Each page re-renders on resize at device pixel ratio (≤ 3×,
+  ≤ 4,096 px). A page whose real size differs from `template.pages` by more than 0.5 pt shows a
+  warning.
+- Field previews are HTML text using the template's fonts (standard fonts → similar CSS faces;
+  library fonts registered with `FontFace`). The engine's shrink-to-fit and shaping are not
+  reproduced; `/editor`'s "Test PDF" runs the real worker on the previewed row.
+- ADR-022.
+
+## Workspaces
+
+`src/app/dashboard/(workspace)/layout.tsx` wraps `/dashboard/vault` and `/dashboard/issue` in
+`WorkspaceToggle` (shadcn Tabs). The active tab is derived from the path; choosing one navigates
+(optimistic highlight); the page is the active tab's panel. Each page checks access itself.
+ADR-023.
 
 ## Web Worker
 
@@ -165,11 +207,15 @@ Cloud Run notes for when it is deployed:
 
 ## Testing
 
-- `npm test` — 430 unit/integration tests (Node). Engine tests render PDFs with poppler
+- `npm test` — 460 unit/integration tests (Node). Engine tests render PDFs with poppler
   (`pdftoppm`/`pdftotext`) and assert on pixels and word positions; they skip without poppler.
 - `tests/showcase.test.ts` writes pictures to `tests/output/` for visual review.
 - `node scripts/e2e-playground.mjs` (after `npm run build`) — production server + Chromium.
 - `npm run test:emulator` — 34 tests against the Firebase Auth + Firestore emulators (claims,
   sessions, proxy, rules).
 - `firebase emulators:exec --only auth,firestore --project demo-v6 'node scripts/e2e-auth.mjs'`
-  (after `npm run build`) — 47 auth checks against the production server.
+  (after `npm run build`) — 53 auth checks against the production server, including the
+  workspace toggle in Chromium.
+- `node scripts/e2e-editor.mjs` (after `npm run build`) — the editor on a touch phone and a
+  desktop: rendering, alignment, D-pad, font size, drag, tap-to-place, swipe-to-close, and the
+  worker's PDF read back with `pdftotext -bbox`.

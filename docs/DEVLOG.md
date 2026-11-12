@@ -5,6 +5,55 @@ was verified, and what is left open. The line-by-line history is in git; this fi
 
 ---
 
+## 2026-11-12 — Session 6: Phase 4, canvas UI and workspace toggle
+
+**Built.** The Tap-to-Place editor and the vault/issuer toggle, as briefed:
+
+- `src/store/templateStore.ts` (Zustand): `activeTemplate`, `selectedPlaceholderId`, `dataRows`;
+  `updatePlaceholderCoords(id, xPercent, yPercent)` plus `nudgePlaceholder` and `setFontSize`.
+  The store converts percent → points (`src/lib/editor/coordinates.ts`), so the template is always
+  in the worker's units.
+- `src/components/canvas/MobileEditor.tsx`: pdf.js renders each page; fields are percent-positioned
+  buttons with true-scale text (`cqw`). Tap to select, drag, tap the page to place the selected
+  field, arrow keys.
+- `src/components/canvas/PropertyBar.tsx`: Framer Motion bottom sheet with a hold-to-repeat D-pad
+  (1 / 10 pt) and font size; swipe down to close.
+- `src/components/dashboard/WorkspaceToggle.tsx` (shadcn Tabs) in a `(workspace)` layout over
+  `/dashboard/vault` and the new guarded `/dashboard/issue`.
+- `/editor` on the sample template with a "Test PDF" button that runs the edited template through
+  the PDF worker. `scripts/e2e-editor.mjs`; e2e-auth extended.
+- New pinned dependencies: zustand 5.0.16, framer-motion 14.6.0, @radix-ui/react-tabs 1.2.1,
+  pdfjs-dist 6.4.299 (all released ≥ 2 weeks ago). ADR-022, ADR-023.
+
+**Found and fixed.** On a touch screen a swipe that started on an unselected field dragged it
+instead of scrolling the page (headless Chrome did not hand the swipe to scrolling despite
+`touch-action`). Touch now only drags the selected field. pdf.js 6 moved `destroy()` from the
+document to its loading task. A tap during a scroll fling only stops the fling — the e2e waits.
+
+**Verified.**
+
+- 460 unit tests (21 new): every whole-point position round-trips through percent exactly; store
+  clamping, nudging, font-size limits, untouched placeholders keep identity; a store → engine →
+  poppler test confirms edited positions print in place on a plain and a `/Rotate 90` page.
+- `scripts/e2e-editor.mjs`, 36/36 (390×844 touch and 1280×900): both pages rendered; the "Name"
+  overlay within 0.75 px of points × scale; D-pad exactly 1 pt per tap and 10 pt with the step
+  switch; font 34 → 35; hold-to-repeat (12 pt in 1 s); arrow keys; drag delta = pixels ÷ scale
+  within 0.05 pt; swiping an unselected field leaves it alone; tap-to-place centres the field within
+  one pixel; the worker's PDF prints "Aarav Sharma" inside the edited box, centred within 1.5 pt
+  (`pdftotext -bbox`); swipe closes the sheet; no script errors.
+- e2e-auth, 53/53 with the emulators: `/dashboard/issue` 307 signed out, 200 for an individual,
+  `/editor` 200 for guests; in Chromium the toggle navigates vault ⇄ issue, follows Back, works
+  from the keyboard.
+- Playground and upload browser suites still pass; `npm run verify` clean. pdf.js adds 129 KB
+  (gzipped) to the editor only, plus a 363 KB parsing worker.
+
+**Open.** Not tried on a real phone (pinch-zoom and real touch scrolling in particular). The editor
+edits the sample template only: upload of a customer's template and saving to Firestore are not
+briefed yet. Preview text does not shrink-to-fit or shape like the engine (Test PDF shows the
+truth). Q4 (should institution members get the issuer workspace) added to the plan.
+
+---
+
 ## 2026-11-12 — Session 5: Phase 3, core PDF engine (worker, ZIP, proxy)
 
 **Built.** The worker moved to `src/workers/pdf.worker.ts` and gained
