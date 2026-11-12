@@ -1,29 +1,36 @@
 # State
 
-**Updated:** 2026-11-12 (session 13, pre-flight audit) · **Branch:** `ccr-23292c99-dwsyq6`
+**Updated:** 2026-11-12 (session 14, B-001 resolved) · **Branch:** `ccr-23292c99-dwsyq6`
 
 ## Current phase
 
-**Pre-Flight Verification & Build Audit** (all 9 phases built; no new features in this step).
+**Ready for Phase 10: Live API Key Injection & Production Deployment.** All 9 build phases are on disk and the
+pre-flight blocker B-001 (`/login` missing) is resolved: signed-out visitors now land on a working sign-in page and are
+routed by role afterwards (`inst_admin`/`inst_staff` → `/dashboard/institution`, `individual` → `/dashboard/vault`,
+`super_admin` → `/admin`). "Ready" means the code needs nothing more before keys; Phase 10 itself has not started.
 
 Phase 9 — AI Enrichment & Smart Audit: **built** (ADR-029), verified with a mocked Gemini; needs a
 Gemini key (E20) and a metering decision before it goes live. The checkout's AI add-on is still off.
-Phase 7 — Passwordless Claiming & The Vault: **complete** (vault dashboard, share page, index).
+Phase 7 — Passwordless Claiming & The Vault: **complete** (vault dashboard, share page, index, `/login`).
 Phase 8 — Escrow Payment Engine: complete, verified against a mock of Razorpay (ADR-028).
 
 ## Active blockers
 
-- No Razorpay account yet (E13): nothing has run against Razorpay's test mode.
+- No keys yet, so nothing has run against the real services: Razorpay (E13), Gemini (E20), Meta WhatsApp (E17),
+  Resend (E18), and a live Firebase project (Auth providers, authorised domain for email links, SMS).
 
 ## Next immediate task
 
-Get a Gemini key and decide how AI use is charged (E20), then wire `SmartAuditCarousel`'s
-`onConfirm` to dispatch/generate. Small gaps carried over from Phase 7 (not blocking):
+**Phase 10 — inject live keys and deploy.** In order: Firebase project (enable Email-link and Phone providers, add the
+Cloud Run domain to authorised domains, seed the first super admin) → Razorpay (E13, steps below) → Resend (E18) →
+Meta WhatsApp (E17) → Gemini (E20, decide metering first, ADR-029) → deploy to Cloud Run and run the e2e checks
+against it. Known small gaps, none blocking:
 
-- `/login` page: the proxy redirects signed-out visitors to `/login?next=…`, which does not exist
-  yet (the claim page has its own sign-in). `PasswordlessSignIn` can be reused.
-- `scripts/e2e-claim.mjs`: email-link and phone-OTP sign-in in the browser. The e2e scripts create
-  verified accounts directly, so the sign-in UI is unit/emulator-tested only, never clicked through.
+- Email-link and phone-OTP sign-in (on `/login` and the claim page) are unit/emulator-tested; they have never been
+  clicked through with a real email or SMS. First real test belongs in Phase 10.
+- `/login` offers email link and SMS code only. Google Sign-In was considered and not added (ADR-030).
+- `SmartAuditCarousel`'s `onConfirm` is not yet wired to dispatch/generate.
+- `scripts/e2e-claim.mjs` (sign-in UI in a browser) is not written.
 
 ### Phase 9 on disk (verified: 567 unit, `scripts/e2e-ai.mjs`)
 

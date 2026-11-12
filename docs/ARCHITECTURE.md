@@ -122,7 +122,7 @@ The route calls `await connection()` so Next 16 never prerenders it.
 ## Authentication and roles (V6 Phase 1)
 
 ```
-Browser ── Google Sign-In (Firebase client SDK) ── ID token
+Browser ── /login or /claim: email link / SMS code (Firebase client SDK) ── ID token
    │ POST /api/auth/session  (same-origin, fresh sign-in, not anonymous)
    ▼
 __session cookie (httpOnly, Secure, SameSite=Lax, 5 days)
@@ -133,6 +133,11 @@ src/proxy.ts ── verify cookie (Admin SDK) ── route rules ── 307 /log
    ▼
 pages / route handlers / server actions ── requireRouteAccess() / authorize()   (verify again)
 ```
+
+`/login` (public, no rule) shows `PasswordlessSignIn`; after the cookie is set it reloads, and the server component
+reads the verified session and redirects with `postLoginPath` (`src/lib/auth/access.ts`): `inst_admin`/`inst_staff` →
+`/dashboard/institution`, `individual` → `/dashboard/vault`, `super_admin` → `/admin`, or a safe `?next=` the person
+may open. The role is never taken from the browser.
 
 | Path                       | Who                               |
 | -------------------------- | --------------------------------- |

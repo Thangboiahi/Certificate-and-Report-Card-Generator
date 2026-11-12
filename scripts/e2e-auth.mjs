@@ -262,6 +262,42 @@ try {
     }
   }
 
+  console.log('\nLogin page (B-001)');
+  for (const path of ['/login', '/login?next=%2Fdashboard%2Fvault']) {
+    const response = await rawGet(server.port, path);
+    check(
+      response.status === 200 && response.body.includes('Sign in'),
+      `signed out → ${path} → 200 with the sign-in form`,
+      `got ${response.status}`,
+    );
+  }
+  const loginExpectations = [
+    // who,        query,                                  expected redirect target
+    ['staff', '', '/dashboard/institution'],
+    ['admin', '', '/dashboard/institution'],
+    ['individual', '', '/dashboard/vault'],
+    ['root', '', '/admin'],
+    ['staff', '?next=%2Fdashboard%2Finstitution', '/dashboard/institution'],
+    ['individual', '?next=%2Fdashboard%2Fissue', '/dashboard/issue'],
+    ['individual', '?next=%2Fdashboard%2Finstitution', '/dashboard/vault'],
+    ['individual', '?next=%2Fadmin', '/dashboard/vault'],
+    ['staff', '?next=%2Fadmin', '/dashboard/institution'],
+    ['individual', '?next=https%3A%2F%2Fevil.example', '/dashboard/vault'],
+    ['individual', '?next=%2F%2Fevil.example', '/dashboard/vault'],
+    ['individual', '?next=%2Flogin', '/dashboard/vault'],
+  ];
+  // The page redirects inside a Suspense boundary, so the answer is 200 with the redirect streamed
+  // in (`NEXT_REDIRECT;replace;<target>;307`), which browsers follow at once.
+  for (const [who, query, target] of loginExpectations) {
+    const response = await rawGet(server.port, `/login${query}`, people[who].cookie);
+    const redirected = /NEXT_REDIRECT;replace;([^;]+);307/.exec(response.body)?.[1] ?? null;
+    check(
+      redirected === target && !response.body.includes('data-testid="login-unavailable"'),
+      `${who} → /login${query} → redirects to ${target}`,
+      `got ${response.status}, redirect ${redirected}`,
+    );
+  }
+
   console.log('\nDisguised paths (signed in as an individual; none may show admin content)');
   const disguises = [
     '/%61dmin',
@@ -295,6 +331,56 @@ try {
       `${path} signed out → ${response.status}, no content`,
       `guarded role ${shown}`,
     );
+  }
+
+  console.log('\nLogin page (Chromium)');
+  {
+    const { chromium } = createRequire(import.meta.url)('playwright');
+    const browser = await chromium.launch();
+    try {
+      const errors = [];
+      // Phone-sized, signed out: the form is usable and has no horizontal scroll.
+      const phone = await browser.newContext({
+        viewport: { width: 360, height: 740 },
+        isMobile: true,
+        hasTouch: true,
+      });
+      const page = await phone.newPage();
+      page.on('pageerror', (error) => errors.push(error.message));
+      await page.goto(`${server.origin}/dashboard/vault`); // bounced by the proxy
+      await page.waitForURL('**/login?next=%2Fdashboard%2Fvault');
+      await page.getByRole('heading', { name: 'Sign in' }).waitFor();
+      await page.getByRole('textbox').first().waitFor();
+      check(true, 'a signed-out visit to /dashboard/vault lands on a working login page');
+      check(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+        ),
+        'the login page has no horizontal scroll at 360px',
+      );
+      await page.screenshot({ path: join(root, 'tests', 'output', 'e2e-login.png') });
+
+      // Signed in: each role is sent to its own home.
+      for (const [who, start, expected] of [
+        ['staff', '/login', '/dashboard/institution'],
+        ['individual', '/login', '/dashboard/vault'],
+        ['individual', '/login?next=%2Fdashboard%2Fissue', '/dashboard/issue'],
+        ['root', '/login', '/admin'],
+      ]) {
+        const context = await browser.newContext();
+        await context.addCookies([
+          { name: '__session', value: people[who].cookie, url: server.origin },
+        ]);
+        const signedIn = await context.newPage();
+        await signedIn.goto(`${server.origin}${start}`);
+        await signedIn.waitForURL(`**${expected}`);
+        check(true, `${who} opening ${start} ends on ${expected}`);
+        await context.close();
+      }
+      check(errors.length === 0, 'no script errors on the login page', errors.join(' | '));
+    } finally {
+      await browser.close();
+    }
   }
 
   console.log('\nWorkspace toggle (Chromium, signed in as an individual)');

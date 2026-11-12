@@ -5,6 +5,36 @@ was verified, and what is left open. The line-by-line history is in git; this fi
 
 ---
 
+## 2026-11-12 — Session 14: `/login` page, B-001 resolved
+
+**Built.** `src/app/login/page.tsx` (server component: reads the verified session, redirects signed-in people by
+role, otherwise shows the form or a "not available" notice when Firebase is not configured), `LoginForm.tsx` (wraps
+`PasswordlessSignIn` with email and mobile; reloads the page once the session cookie is set), and the pure
+`roleHomePath` / `postLoginPath` in `src/lib/auth/access.ts`. ADR-030. Docs: BUGS (B-001 moved to Resolved), STATE
+(ready for Phase 10), PLAN, ARCHITECTURE, both CHANGELOGs.
+
+**Decisions.** Passwordless only, no Google Sign-In (reuse of tested code, ADR-027); role read on the server, never from
+the browser; `?next=` honoured only if same-origin and permitted for that role.
+
+**Learned.** A redirect issued inside `<Suspense>` arrives as a streamed redirect (HTTP 200 + `NEXT_REDIRECT;replace;<path>;307`
+and a meta refresh), not a 307 status. Browsers follow it immediately; the e2e script asserts the target from the body.
+
+**Verified.** `npm test`: 581/581 (14 new for `roleHomePath`/`postLoginPath`, including open-redirect and loop cases).
+`npm run lint`, `npm run typecheck`, `prettier --check .`, `npm run build`: clean (`/login` listed as partial prerender).
+`npx firebase emulators:exec --only auth,firestore --project demo-v6 'node scripts/e2e-auth.mjs'` on the production
+build: 74 checks ok, including 14 new `/login` route checks (signed out gets the form; staff, admin, individual,
+super admin land on their home; forbidden, external, `//host` and `/login` values of `next` are ignored) and a Chromium
+run (signed-out bounce to the form with no horizontal scroll at 360 px; each role ends on its page; no script errors).
+Screenshot: `tests/output/e2e-login.png`.
+
+**Not verified.** An actual email link or SMS code (emulator accounts were created directly, as in the other e2e
+scripts); the first real test belongs in Phase 10 with a live Firebase project. `npm run test:emulator` not re-run
+(no change to rules or claims code).
+
+**Open.** Phase 10: live keys (E13, E17, E18, E20), Firebase providers and authorised domain, first super admin.
+
+---
+
 ## 2026-11-12 — Session 13: Pre-flight verification and build audit (no feature work)
 
 **Checked.** `npm run build` (Next 16.4.6, Turbopack): compiled, TypeScript clean, 25 static pages generated,

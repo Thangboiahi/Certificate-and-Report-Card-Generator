@@ -57,17 +57,18 @@ when its brief arrives, never guessed in advance. Live status: [STATE.md](./STAT
 
 Status key: ✅ done and verified · 🟡 in progress · ⬜ not started
 
-| Phase | Name                                     | Status                                 |
-| ----- | ---------------------------------------- | -------------------------------------- |
-| 1     | Foundation & RBAC                        | ✅ (`/login`, super-admin seed open)   |
-| 2     | Universal Uploader & Image Editor        | ✅                                     |
-| 3     | Core PDF Engine (Web Worker, ZIP, proxy) | ✅                                     |
-| 4     | Canvas UI & Workspace Toggles            | ✅ (real-phone check open)             |
-| 5     | CRM & Kanban Dashboards, dispatch        | ✅ (live provider accounts open)       |
-| 6     | Audit Logs & Time-Locked Claims          | ✅ (scheduler job open)                |
-| 7     | Passwordless Claiming & The Vault        | 🟡                                     |
-| 8     | Escrow Payment Engine (Razorpay Route)   | ✅ (mock-verified; test keys E13)      |
-| 9     | AI Enrichment & Smart Audit              | 🟡 (built; needs Gemini key, metering) |
+| Phase | Name                                       | Status                                        |
+| ----- | ------------------------------------------ | --------------------------------------------- |
+| 1     | Foundation & RBAC                          | ✅ (super-admin seed open)                    |
+| 2     | Universal Uploader & Image Editor          | ✅                                            |
+| 3     | Core PDF Engine (Web Worker, ZIP, proxy)   | ✅                                            |
+| 4     | Canvas UI & Workspace Toggles              | ✅ (real-phone check open)                    |
+| 5     | CRM & Kanban Dashboards, dispatch          | ✅ (live provider accounts open)              |
+| 6     | Audit Logs & Time-Locked Claims            | ✅ (scheduler job open)                       |
+| 7     | Passwordless Claiming & The Vault          | 🟡 (real email/SMS sign-in untested)          |
+| 8     | Escrow Payment Engine (Razorpay Route)     | ✅ (mock-verified; test keys E13)             |
+| 9     | AI Enrichment & Smart Audit                | 🟡 (built; needs Gemini key, metering)        |
+| 10    | Live API Key Injection & Production Deploy | ⬜ (ready to start; needs E13, E17, E18, E20) |
 
 ### Phase 8 — Escrow Payment Engine (Razorpay Route)
 
@@ -96,7 +97,8 @@ Pay-to-claim checkout with revenue splitting. Decision in ADR-028.
 | `components/vault/VaultDashboard.tsx`: grid of owned vault items, "Generate Public Link"                            | ✅     |
 | Public verification page `/v/[shareId]`; `ownerUid + issuedAt` index                                                | ✅     |
 | Vault end to end in Chromium (`scripts/e2e-vault.mjs`, 10 checks)                                                   | ✅     |
-| Email-link / phone-OTP sign-in driven in a browser (`scripts/e2e-claim.mjs`); `/login` page                         | ⬜     |
+| `/login` page (email link / SMS, redirect by role; B-001)                                                           | ✅     |
+| Email-link / phone-OTP sign-in driven in a browser with real providers (`scripts/e2e-claim.mjs`)                    | ⬜     |
 
 ### Phase 1 — Foundation & RBAC (two items open)
 
@@ -108,7 +110,7 @@ Pay-to-claim checkout with revenue splitting. Decision in ADR-028.
 | Route protection proxy for `/admin`, `/dashboard/institution`, `/dashboard/vault`, `/editor` | ✅     |
 | Firestore rules for institutions, templates, vault items                                     | ✅     |
 | Local Firebase emulator workflow with placeholder `.env.local` (no live project, no billing) | ✅     |
-| `/login` page (Google Sign-In UI) wired to the Auth emulator                                 | ⬜     |
+| `/login` page (passwordless; Google Sign-In not added, ADR-030) on the Auth emulator         | ✅     |
 | Seeding the first super admin in the emulator                                                | ⬜     |
 
 ### Phase 2 — Universal Uploader & Image Editor

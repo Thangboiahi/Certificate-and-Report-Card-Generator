@@ -4,6 +4,9 @@ Newest first. Per-change detail: git history and the repository-root `CHANGELOG.
 
 ## Completed
 
+- **B-001 resolved — `/login` page:** passwordless sign-in for issuers and staff (email link or SMS code),
+  session cookie via the existing `/api/auth/session`, then a server-side redirect by role (`postLoginPath`).
+  14 unit tests, `scripts/e2e-auth.mjs` extended (74 checks ok). Platform ready for Phase 10 (live keys).
 - **Pre-flight audit:** production build, lint, typecheck, 567 unit and 70 emulator tests all pass; routing and role/claim contract checked. No code changes. One open gap: `/login` page missing (BUGS B-001).
 
 - **Phase 9 — AI Enrichment & Smart Audit:** `src/lib/ai/*`, `/api/ai/enrich`, `/api/ai/audit`,

@@ -1002,3 +1002,29 @@ applying a patch can never crash the UI. The brief's `lib/…` / `components/…
 - Translations are only as good as the model; the template font must contain the script (ADR-007).
 - Not run against the real Gemini API (no key): the request shape follows Google's documented
   `generateContent` structured-output format and is unit-tested against a mock.
+
+---
+
+## ADR-030 — `/login`: reuse passwordless sign-in, route by role on the server
+
+**Status:** Accepted (session 14, resolves B-001).
+
+**Context.** The proxy and `requireAccess` send signed-out visitors to `/login?next=…`, which did not exist. The brief
+asked for Google Sign-in and/or passwordless email, and for a redirect by role after sign-in.
+
+**Decision.**
+
+- **Passwordless only (email link + SMS code), by reuse of `PasswordlessSignIn`.** It is already built, unit- and
+  emulator-tested and implements ADR-027 (no passwords, browser-side Firebase session dropped after the cookie is set).
+  Google Sign-In would add a provider to configure and a popup flow with its own failure modes, for no capability the
+  institution staff lack. Revisit if staff ask for it; it fits `establishSession` unchanged.
+- **The role comes from the server.** After the cookie is set the page reloads (`window.location.replace`) and the
+  server component reads the verified session cookie, then redirects with the pure function `postLoginPath`. Nothing
+  about the role is read from, or trusted from, the browser. The session route stays unchanged (204, no body).
+- **`?next=` is honoured only when safe and permitted:** same-origin path (`safeReturnPath`), not `/login`, and allowed
+  for that user by the shared `ROUTE_RULES`; otherwise the role's home. So no open redirect, no landing on a 403/404.
+- `/login` stays public (no `ROUTE_RULES` entry); a signed-in visitor is redirected away, so there is no loop.
+
+**Consequences.** Next streams a redirect issued inside `<Suspense>` (status 200 with `NEXT_REDIRECT` and a meta
+refresh) rather than a 307; browsers follow it at once, and the e2e script asserts the target from the body. A true 307
+would need the proxy to verify the cookie on `/login` as well; not worth a second copy of the role logic.

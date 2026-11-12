@@ -204,3 +204,42 @@ export function safeReturnPath(
   if (/[\u0000-\u001F\u007F]/.test(next)) return fallback;
   return next;
 }
+
+/**
+ * Where a person lands after signing in: the home of their role.
+ *
+ *   super_admin             → /admin
+ *   inst_admin / inst_staff → /dashboard/institution
+ *   individual (Micro-Issuer) → /dashboard/vault
+ */
+export function roleHomePath(user: SessionUser): string {
+  switch (user.role) {
+    case 'super_admin':
+      return '/admin';
+    case 'inst_admin':
+    case 'inst_staff':
+      return '/dashboard/institution';
+    default:
+      return '/dashboard/vault';
+  }
+}
+
+/**
+ * The page to send a freshly signed-in user to. The `?next=` they were bounced from wins when it
+ * is a same-origin path this user may actually open (so an admin returns to what they asked for);
+ * otherwise they get their role's home. Never sends anyone to a page that would answer 403/404,
+ * and never to `/login` itself.
+ */
+export function postLoginPath(user: SessionUser, next: string | null | undefined): string {
+  const home = roleHomePath(user);
+  if (!next) return home;
+  const requested = safeReturnPath(next, home);
+  if (requested === home) return home;
+  const pathname = requested.split(/[?#]/, 1)[0] ?? '';
+  const canonical = canonicalPath(pathname);
+  if (canonical === null || canonical === '/login' || canonical.startsWith('/login/')) return home;
+  const rule = ruleForPath(pathname);
+  // Unlisted paths are public pages: fine to return to.
+  if (!rule) return requested;
+  return evaluateAccess(rule.access, user) === 'allow' ? requested : home;
+}

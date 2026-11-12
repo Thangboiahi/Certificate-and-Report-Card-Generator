@@ -8,6 +8,8 @@ import {
   parseRoleClaims,
   requiresRevocationCheck,
   ruleForPath,
+  postLoginPath,
+  roleHomePath,
   safeReturnPath,
   sameRoleClaims,
   toSessionUser,
@@ -262,5 +264,55 @@ describe('safeReturnPath', () => {
     'dashboard',
   ])('rejects %j', (value) => {
     expect(safeReturnPath(value)).toBe('/dashboard/vault');
+  });
+});
+
+describe('roleHomePath', () => {
+  it.each([
+    ['super_admin', null, '/admin'],
+    ['inst_admin', 'inst-1', '/dashboard/institution'],
+    ['inst_staff', 'inst-1', '/dashboard/institution'],
+    ['individual', null, '/dashboard/vault'],
+  ] as const)('%s lands on %s', (role, institutionId, expected) => {
+    expect(roleHomePath(user(role, institutionId))).toBe(expected);
+  });
+});
+
+describe('postLoginPath', () => {
+  const staff = user('inst_staff', 'inst-1');
+  const solo = user('individual');
+
+  it('sends institution staff to the institution dashboard', () => {
+    expect(postLoginPath(staff, null)).toBe('/dashboard/institution');
+    expect(postLoginPath(user('inst_admin', 'inst-1'), undefined)).toBe('/dashboard/institution');
+  });
+
+  it('sends a Micro-Issuer to their vault', () => {
+    expect(postLoginPath(solo, null)).toBe('/dashboard/vault');
+  });
+
+  it('returns to the requested page when this user may open it', () => {
+    expect(postLoginPath(solo, '/dashboard/issue?x=1')).toBe('/dashboard/issue?x=1');
+    expect(postLoginPath(staff, '/dashboard/vault')).toBe('/dashboard/vault');
+    expect(postLoginPath(solo, '/editor')).toBe('/editor');
+  });
+
+  it('falls back to the role home when the request is off limits', () => {
+    expect(postLoginPath(solo, '/dashboard/institution')).toBe('/dashboard/vault');
+    expect(postLoginPath(solo, '/admin')).toBe('/dashboard/vault');
+    expect(postLoginPath(solo, '/%41dmin')).toBe('/dashboard/vault');
+    expect(postLoginPath(staff, '/admin/users')).toBe('/dashboard/institution');
+  });
+
+  it.each(['https://evil.example', '//evil.example', '/\\evil.example', 'javascript:1', '/%zz'])(
+    'never follows %j',
+    (next) => {
+      expect(postLoginPath(solo, next)).toBe('/dashboard/vault');
+    },
+  );
+
+  it('never loops back to the login page', () => {
+    expect(postLoginPath(solo, '/login?next=/dashboard/issue')).toBe('/dashboard/vault');
+    expect(postLoginPath(staff, '/LOGIN')).toBe('/dashboard/institution');
   });
 });
