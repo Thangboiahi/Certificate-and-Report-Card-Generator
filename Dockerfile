@@ -5,6 +5,14 @@
 #   docker build -t document-generator .
 #   docker run --rm -p 8080:8080 -e FIREBASE_PROJECT_ID=<project> document-generator
 #
+# Nothing is configured at build time: the image reads every setting when it starts, so one image
+# serves staging and production. Set these on the Cloud Run service (secrets from Secret Manager):
+#   FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY, FIREBASE_WEB_API_KEY, APP_ORIGIN
+#   RAZORPAY_KEY_ID (rzp_test_… for test mode), RAZORPAY_KEY_SECRET, RAZORPAY_WEBHOOK_SECRET
+#   WHATSAPP_*, RESEND_*, GEMINI_API_KEY, CRON_SECRET (see docs/ARCHITECTURE.md, "Deployment").
+# The Razorpay key id reaches the browser through /api/checkout, so no NEXT_PUBLIC_ variable (which
+# would be fixed into the image at build time) is needed.
+#
 # Three stages keep the final image small: dependencies are installed, the app is built, and only
 # Next.js's "standalone" output (a minimal server plus the node_modules files it actually uses)
 # is copied into the image that runs. See docs/ARCHITECTURE.md, "Deployment".
@@ -29,7 +37,8 @@ WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-RUN npm run build
+# The cache mount keeps Next.js's incremental build cache between builds.
+RUN --mount=type=cache,target=/app/.next/cache npm run build
 
 # ── 3. Run ───────────────────────────────────────────────────────────────────────────────────────
 FROM ${NODE_IMAGE} AS run
