@@ -17,6 +17,7 @@ All notable changes. Newest first. Details and reasoning: `docs/DEVLOG.md`, `doc
 
 ### Added
 
+- Phase 14: QR pre-minting. `POST /api/verify/mint` creates unclaimed verification stubs before generation; the editor gains "Add verification QR" and "Generate all (ZIP)"; scanning a QR before the holder claims shows "Issued, not yet claimed"; dispatch links the printed id to the claim link so claiming keeps it. The Razorpay pay screen shows "Test mode" for test keys. `.dockerignore` tightened (ADR-035).
 - Phase 13, public pages: a real homepage (hero, how it works, features, plans, calls to action to `/login` and `/editor`) and a public verification portal at `/verify/{id}` with Verified, INVALID / REVOKED and EXPIRED states, a certificate preview and an "Add to LinkedIn profile" button (ADR-034). The old `/v/{id}` links redirect.
 - Phase 12, live dashboards: the Kanban reads and writes Firestore (`credential_requests`, `/api/requests`, "Add request", refresh every 15 s, "No active requests" state) and the sample requests are gone; the vault shows an alert with the exact Firebase Console link when an index is missing, and "Your vault is empty" when it has nothing (ADR-033).
 - Editor manual entry: "Skip & Enter Data Manually" in the upload gateway (no CSV needed), plus an in-editor panel to add fields and type values; Test PDF works with no data.

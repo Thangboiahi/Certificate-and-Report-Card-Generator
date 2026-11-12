@@ -207,6 +207,15 @@ MobileEditor ── per page: <div aspect-ratio=w/h, container-type=inline-size>
   `verificationState` picks valid, expired or revoked; `VerificationResult` renders the verdict, metadata and a preview; `AddToLinkedIn`
   opens the Add-to-Profile URL from `src/lib/linkedin.ts`. `/v/{shareId}` redirects here.
 
+## Verification pre-minting (Phase 14)
+
+- `POST /api/verify/mint` (`src/lib/verify/handler.ts`, `stubs.ts`) mints 256-bit ids and stores `verification_stubs/{id}` (`unclaimed`). The editor's
+  "Generate all (ZIP)" calls it through `src/lib/verifyClient.ts` and puts `verification_id` / `verification_url` on each row; "Add verification QR"
+  adds a QR placeholder bound to `{{verification_url}}` (`src/lib/verify/template.ts`). The engine and Worker are unchanged.
+- Dispatch targets may carry `verificationId`; `runDispatch` checks ownership first, claim tokens store it, `mintVaultItem` adopts it as the vault
+  item's `shareId` and marks the stub `claimed`. `findSharedCredential` answers from the vault item if one exists, else from an unclaimed stub.
+- ADR-035. Rules: `verification_stubs` is server-only.
+
 ## Workspaces
 
 `src/app/dashboard/(workspace)/layout.tsx` wraps `/dashboard/vault` and `/dashboard/issue` in
@@ -329,8 +338,9 @@ caller-supplied local file → same-origin fetch → proxy with the user's token
 
 `next.config.ts` sets `output: 'standalone'`. The `Dockerfile` (three stages, Node 24 slim,
 non-root user, `PORT=8080`, `HOSTNAME=0.0.0.0`) packages `.next/standalone`.
-**Not yet built or run** — see DEVLOG. The standalone server itself was exercised by
-`scripts/e2e-playground.mjs`.
+**The image has not been built** (no Docker in the agent environments so far). What the final stage copies (`.next/standalone`, `.next/static`, `public`)
+was assembled by hand and run as `node server.js` on `0.0.0.0:8080` (every page, static files and public assets answered; ADR-035, DEVLOG session 23). The
+image is configured entirely at run time; the variables are listed at the top of the `Dockerfile`. `.dockerignore` excludes `.claude` and logs.
 
 Cloud Run notes for when it is deployed:
 

@@ -1,8 +1,20 @@
 # State
 
-**Updated:** 2026-11-12 (session 22, Phase 13) · **Branch:** `claude/global-app-shell-state-f72bd1`
+**Updated:** 2026-11-12 (session 23, Phase 14) · **Branch:** `claude/global-app-shell-state-f72bd1`
 
 ## Current phase
+
+**Phase 14 (QR Pre-Minting & Containerisation): BUILT** (2026-11-12, ADR-035). Verification ids are now minted before generation: the editor's new
+"Add verification QR" and "Generate all (ZIP)" ask `/api/verify/mint` for one 256-bit id per row (stored as `unclaimed` stubs), the QR on each PDF
+prints `/verify/{id}`, and scanning it before the holder claims shows "Issued, not yet claimed". Dispatch can carry the id into the claim link, so
+claiming keeps the printed id. Razorpay: the key already reaches the browser from the server (`RAZORPAY_KEY_ID`), so `NEXT_PUBLIC_RAZORPAY_KEY_ID` was
+**not** added (see ADR-035); the pay screen now shows "Test mode" for `rzp_test_` keys; the cart maths was already correct and tested. Docker:
+`output: 'standalone'`, the `Dockerfile` and `.dockerignore` already existed and were kept and hardened (`.claude` excluded, build cache mount, run-time
+variables documented). Verified: typecheck, lint, 598 unit tests, 85 emulator tests (including new stub, dispatch-link and claim-adoption tests),
+a production build served against the emulators and driven in a browser (3 rows -> 3 ids -> ZIP of 3 PDFs; a second run mints nothing; a signed-out
+visitor sees "Issued, not yet claimed"), and the standalone server run exactly as the image's last stage lays it out (47 MB). **Not verified: the Docker
+image itself (no Docker here), that a scanner decodes the QR on a PDF, `scripts/e2e-*.mjs`, a real Razorpay test payment, anything on the live project.**
+Open: a mint quota; revoking unclaimed stubs has no screen; guests cannot mint; prices (E12). Phase 13 and 12 notes below still apply.
 
 **Phase 13 (Public-Facing Architecture): BUILT** (2026-11-12, ADR-034). The homepage `/` is a responsive marketing page with calls to action to
 `/login` and `/editor`. `/verify/{id}` is the public verification portal: green "Verified" with issuer, recipient, issue date and a

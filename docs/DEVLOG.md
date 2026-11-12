@@ -5,6 +5,37 @@ was verified, and what is left open. The line-by-line history is in git; this fi
 
 ---
 
+## 2026-11-12 — Session 23: Phase 14, QR pre-minting, Razorpay check, Docker audit
+
+**Built.** (ADR-035)
+
+- **Pre-minting.** `POST /api/verify/mint` and `verification_stubs` (server-only, rules + rules test); `src/lib/verify/{ids,limits,stubs,handler,template}.ts`;
+  `src/lib/verifyClient.ts` (`premintVerification`, chunked, reuses existing ids); dispatch targets accept `verificationId` (checked before any charge), claim
+  tokens store it, `mintVaultItem` adopts it as `shareId`/`mintedShareId` and marks the stub claimed, `setSharing` restores it; `findSharedCredential` falls back to the stub;
+  the verify page has an "Issued, not yet claimed" state. Editor: "Add verification QR", "Generate all (ZIP)" (progress, cancel, mints only when the template uses the QR), test PDFs
+  use a sample address and never mint.
+- **Razorpay.** `razorpayMode()` and a "Test mode" notice on the pay screen. No `NEXT_PUBLIC_RAZORPAY_KEY_ID` (reasons in ADR-035).
+- **Docker.** `.dockerignore` (`.claude`, logs, `**/node_modules`, key files), build cache mount, run-time variables documented in the `Dockerfile`.
+- **Test config.** `vitest.config.mts` now includes `*.test.tsx`: the Phase 12 `IndexErrorAlert.test.tsx` had never been running. It passes.
+
+**Deviations from the directive.** UUIDv4 -> the existing 256-bit id (one id format). `NEXT_PUBLIC_RAZORPAY_KEY_ID` not added. `next.config` and the Dockerfile already existed.
+The worker was not changed: it must stay network-free (ADR-013), so the browser mints and the engine just prints the row.
+
+**Verified.** `npm run typecheck`, `npm run lint`, `npm test` (598 passed, 39 skipped as before), emulator suite (85 passed: new `stubs.emulator.test.ts` covers minting, ownership,
+refusal before charge, linking, claim adoption, stop/restart sharing, other recipients untouched). Production build against the emulators, signed in, in the browser pane: the sample template
+with a 3-row CSV, "Add verification QR", "Generate all" -> one mint call with the 3 names, 3 ids of 43 characters, a ZIP with 3 PDFs ("Made 3 PDFs."); a second "Generate all" made no
+mint call; a signed-out fetch of an id returned "Issued, not yet claimed" with issuer, recipient and date, no LinkedIn button; a revoked stub showed the red alert. The browser run found a bug
+(the preview was stamped EXPIRED for an unclaimed credential); fixed and covered by `VerificationResult.test.tsx`. The image's last stage was reproduced by hand (`.next/standalone` + `.next/static` +
+`public`, 47 MB; standalone alone 39 MB, no `.env`, tests or `.claude`) and run as `node server.js` with `PORT=8080 HOSTNAME=0.0.0.0`: `/`, `/editor`, `/login`, `/verify/x`, `/playground`, a CSS chunk and
+`/samples/template.pdf` all 200; `POST /api/verify/mint` -> 401 without a session, 403 cross-origin.
+**Not verified.** The Docker image itself: no Docker in this environment. That a phone scanner decodes the QR in the generated PDF (the QR drawing is the engine's, covered by its tests; the address
+put into it was checked at the row level). A real Razorpay test payment (needs `rzp_test_` keys, E13). `scripts/e2e-*.mjs` (no Playwright here). The live project.
+**Learned.** Vitest only ran `*.test.ts`; React component tests need `.test.tsx` in the include (fixed). `permanentRedirect` inside a Suspense-streamed page answers 200 to a non-browser client
+(the redirect is delivered in the stream); browsers follow it.
+**Open.** Mint quota per user before launch (R11). Revoking an unclaimed stub has no screen. Guests cannot mint. Decide whether a held (unsent) template should retain its ids.
+
+---
+
 ## 2026-11-12 — Session 22: Phase 13, public homepage and verification portal
 
 **Built.** (ADR-034)

@@ -3,7 +3,7 @@
 The single place to see what we are building, where we are, what comes next, and what is waiting
 on a decision. Updated at the end of every working session.
 
-**Last updated:** 2026-11-12 (session 22 — Phase 13 public pages built; session 21 — Phase 12 live Kanban and Vault wiring built; live index build and e2e run open)
+**Last updated:** 2026-11-12 (session 23 — Phase 14 QR pre-minting and container audit built; session 22 — Phase 13 public pages built; session 21 — Phase 12 live Kanban and Vault wiring built; live index build and e2e run open)
 
 Related records: [ARCHITECTURE.md](./ARCHITECTURE.md) (how it works) ·
 [DECISIONS.md](./DECISIONS.md) (why) · [DEVLOG.md](./DEVLOG.md) (history)
@@ -71,7 +71,8 @@ Status key: ✅ done and verified · 🟡 in progress · ⬜ not started
 | 10    | Live API Key Injection & Production Deploy | ⬜ (ready to start; needs E13, E17, E18, E20) |
 | 11    | Global App Shell & State Cleanup (local)   | ✅ (sign-out e2e and live-session check open) |
 | 12    | Dashboard Live Wiring & Vault (local)      | 🟡 (built, emulator-verified; live index and e2e run open) |
-| 13    | Public-Facing Architecture (local)         | 🟡 (built, browser-verified; prices need E12, QR ids open) |
+| 13    | Public-Facing Architecture (local)         | 🟡 (built, browser-verified; prices need E12) |
+| 14    | QR Pre-Minting & Containerisation (local)  | 🟡 (built, emulator and browser verified; image not built, quota open) |
 
 ### Phase 8 — Escrow Payment Engine (Razorpay Route)
 
@@ -293,6 +294,7 @@ phase.
 | Q8  | Claim-fee economics: platform fee (placeholder 10 % of the claim fee), AI add-on price (placeholder ₹49, switched off), escrow hold (placeholder 7 days). | Configurable without code (`PLATFORM_FEE_BPS`, `AI_ENRICHMENT_FEE_PAISE`, `ESCROW_HOLD_DAYS`, ADR-028). The platform fee must cover Razorpay's ≈2 % + GST, which is charged on the whole payment. Decide with pricing (E12).                        |
 | Q9  | How do Micro-Issuers receive claim fees?                                                                                                                  | Route needs a KYC'd Linked Account per payee. Depends on Q6 (Micro-Issuer dispatch). Until then only institutions can charge.                                                                                                                       |
 | R10 | Refund after a mistaken capture relies on reversing the issuer's held transfer.                                                                           | Escrow hold makes reversal possible before settlement; to be confirmed in Razorpay test mode, especially right after capture (E13).                                                                                                                 |
+| R11 | **Verification ids can be minted without limit** by any signed-in user (up to 2,500 per call), and unclaimed stubs are never deleted.                     | Add a per-user or per-institution quota (and a purge policy for stubs never linked to a document) before a public launch (ADR-035).                                                                                                                 |
 | Q1  | Should free-tier documents carry a watermark?                                                                                                             | Open — pricing decision (E12).                                                                                                                                                                                                                      |
 | Q2  | Is a desktop-first power-user mode needed alongside mobile-first?                                                                                         | Open — depends on who the first customers are.                                                                                                                                                                                                      |
 

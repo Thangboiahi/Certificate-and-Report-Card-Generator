@@ -1154,3 +1154,48 @@ given credential ID" without a login. A page already existed at `/v/{shareId}` (
 
 **Consequences.** A holder who never turned sharing on has nothing to verify at a public address. The homepage copy describes
 WhatsApp/email delivery and AI clean-up as features; both need provider keys (E17, E18, E20) before they work in production.
+
+---
+
+## ADR-035 — QR pre-minting: verification ids minted before generation, stored as unclaimed stubs; the Razorpay key stays server-delivered; the image is configured at run time
+
+**Status:** accepted · 2026-11-12 (Phase 14).
+
+**Context.** A QR code on a printed certificate has to say where to verify it, but a credential only gets a vault item, and a share id
+(ADR-027, ADR-034), when its recipient claims it. So a QR printed at generation time had nothing to point at.
+
+**Decision.**
+
+- **Mint first.** Before a batch is generated, the browser asks `POST /api/verify/mint` for one id per row (`src/lib/verifyClient.ts`, up
+  to 2,500 per request). Each id is 256 random bits, base64url, the same format and generator as claim tokens and share ids, so the
+  existing `/verify/{id}` lookup and its format check are unchanged. (The directive suggested a UUIDv4, 122 bits; a longer, already
+  standard id avoids a second id format.) The server stores `verification_stubs/{id}` (server-only; rules `if false`, rules test):
+  issuer (from the session, never the body), credential name, optional recipient name, status `unclaimed`. The browser puts the id and its
+  address on the row as `verification_id` and `verification_url`; a QR placeholder bound to the template `{{verification_url}}` prints it.
+  **The PDF engine and Web Worker are unchanged and stay network-free (ADR-013)**: they print the columns they are given.
+- **Addresses come from `APP_ORIGIN`** (this request's own origin only when it is unset, i.e. local development), so a QR never points at a
+  host the caller chose.
+- **Linking to claim links.** A dispatch target may carry `verificationId`. The server checks every id is a stub of the caller's own,
+  unclaimed and not linked to another batch, **before charging anything**; the claim token stores it (re-issued tokens copy it); claiming
+  creates the vault item with `shareId` = that id and `mintedShareId`, marks the stub `claimed`, and the printed QR now resolves to the
+  claimed credential. Sharing is on from the claim (the QR is public by construction); the owner can still "Stop sharing", after which the
+  paper QR says "not valid, or no longer shared", and turning sharing back on restores the same id (`mintedShareId`), not a new one.
+- **What a scan shows.** A stub that is still unclaimed shows a blue "Issued, not yet claimed" with issuer, recipient (as printed) and date,
+  no LinkedIn button. A revoked stub shows the red INVALID / REVOKED alert. A claimed stub no longer answers by itself: the vault item does.
+- **Test PDFs never mint.** "Test PDF" fills the QR with `/verify/test-only`, which will not verify. "Generate all (ZIP)" mints only for
+  templates that use the verification columns, keeps the ids in the data rows, and reuses them on the next run.
+- **Razorpay key.** No `NEXT_PUBLIC_RAZORPAY_KEY_ID`. A `NEXT_PUBLIC_` variable is fixed into the build, so it would be absent from an image built
+  without secrets, and it could disagree with `RAZORPAY_KEY_SECRET` (an order created with one key pair is rejected by Checkout opened with
+  another). The key id is public by design, and `/api/checkout` already returns the server's `RAZORPAY_KEY_ID` with each order; the page uses
+  that. New: `razorpayMode(keyId)` and a "Test mode" notice on the pay screen when the key starts with `rzp_test_`. Cart maths is unchanged and was
+  already covered (Base Fee, optional AI add-on, platform split, rounding: `pricing.test.ts`, `escrow.emulator.test.ts`). There is no "volume"
+  component in the cart: ADR-028 prices one claim, not a batch.
+- **Docker.** `next.config.ts` already sets `output: 'standalone'` and a three-stage `Dockerfile` and `.dockerignore` already existed. Kept; changed:
+  `.dockerignore` now excludes `.claude` (agent worktrees hold whole repository copies whose `.ts` files `next build` would type-check), logs,
+  editor folders and any service-account file; the build stage mounts `.next/cache`; the Dockerfile lists the run-time variables. Nothing is
+  configured at build time.
+
+**Consequences.** Unclaimed stubs are never deleted (the paper may outlive any retention period) and minting is open to any signed-in user up
+to 2,500 per call: add a quota before a public launch (risk R11). Guests cannot mint, so a QR made without signing in cannot verify. Revoking an
+unclaimed stub has rules and a verdict but no screen yet. The editor's "Generate all" is new in this phase: it is the first place in the product where
+a whole batch is made from the template editor.
