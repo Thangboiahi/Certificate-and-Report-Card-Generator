@@ -4,7 +4,7 @@
  *
  * Flow: authenticate → normalise the link → fetch safely → answer with the verified bytes.
  */
-import { authenticateProxyRequest, type TokenVerifier } from './auth';
+import { authenticateProxyRequest, type SessionVerifier, type TokenVerifier } from './auth';
 import { readImageProxyConfig, type ImageProxyConfig } from './config';
 import { ProxyError } from './errors';
 import { normalizeImageUrl } from './normalize-url';
@@ -16,6 +16,7 @@ const MAX_URL_LENGTH = 4096;
 export interface ProxyHandlerDependencies {
   config?: ImageProxyConfig;
   verifyToken?: TokenVerifier;
+  verifySession?: SessionVerifier;
   policy?: NetworkPolicy;
 }
 
@@ -61,7 +62,12 @@ export async function handleProxyImageRequest(
   let uid: string | null = null;
 
   try {
-    const user = await authenticateProxyRequest(request, config, dependencies.verifyToken);
+    const user = await authenticateProxyRequest(
+      request,
+      config,
+      dependencies.verifyToken,
+      dependencies.verifySession,
+    );
     uid = user.uid;
 
     const raw = new URL(request.url).searchParams.get('url');

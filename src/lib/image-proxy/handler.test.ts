@@ -65,6 +65,25 @@ describe('handleProxyImageRequest', () => {
     expect(new Uint8Array(await response.arrayBuffer())).toEqual(TINY_PNG);
   });
 
+  it('accepts the session cookie that the browser sends on same-origin requests', async () => {
+    const { url, policy } = await startOrigin();
+    const target = new URL('https://app.example.in/api/proxy-image');
+    target.searchParams.set('url', `${url}/photo.png`);
+    const withCookie = (cookie: string) =>
+      handleProxyImageRequest(new Request(target, { headers: { cookie } }), {
+        config: BASE_CONFIG,
+        verifyToken: acceptToken,
+        verifySession: async (value) => (value === 'good-session' ? { uid: 'user-2' } : null),
+        policy,
+      });
+
+    expect((await withCookie('theme=dark; __session=good-session')).status).toBe(200);
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    expect((await withCookie('__session=forged')).status).toBe(401);
+    expect((await withCookie('__session=%E0%A4%A')).status).toBe(401);
+    expect((await withCookie('other=good-session')).status).toBe(401);
+  });
+
   it('rejects requests without a token', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const { url, policy, requests } = await startOrigin();

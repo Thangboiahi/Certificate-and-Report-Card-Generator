@@ -15,7 +15,7 @@ import {
   createPdfEngineClient,
   type GenerationJobHandle,
   type PdfEngineClient,
-} from '@/workers/pdf-engine.client';
+} from '@/lib/pdfEngine';
 
 import { SAMPLE_FONT_URLS, SAMPLE_ROWS, SAMPLE_TEMPLATE, SAMPLE_TEMPLATE_URL } from './sample';
 
@@ -23,10 +23,14 @@ import { SAMPLE_FONT_URLS, SAMPLE_ROWS, SAMPLE_TEMPLATE, SAMPLE_TEMPLATE_URL } f
 const MAX_LINKED_FILES = 8;
 
 const BATCH_SIZES = [
-  { copies: 1, label: `${SAMPLE_ROWS.length} rows` },
-  { copies: 10, label: `${SAMPLE_ROWS.length * 10} rows` },
-  { copies: 50, label: `${SAMPLE_ROWS.length * 50} rows` },
+  { copies: 1, rows: SAMPLE_ROWS.length },
+  { copies: 10, rows: SAMPLE_ROWS.length * 10 },
+  { copies: 50, rows: SAMPLE_ROWS.length * 50 },
+  // The largest batch the product supports (PLAN.md, E11).
+  { copies: 417, rows: 2500 },
 ];
+
+type PlaygroundMode = OutputMode | 'zip';
 
 interface LinkedFile {
   fileName: string;
@@ -39,6 +43,8 @@ interface RunOutcome {
   result: GenerationResult;
   fileCount: number;
   totalBytes: number;
+  /** ZIP mode only. */
+  zip?: { url: string; fileName: string };
 }
 
 type Status =
@@ -71,12 +77,14 @@ async function loadAssets(): Promise<Assets> {
 }
 
 /** Repeats the sample rows to simulate a larger batch, keeping roll numbers and ids unique. */
-function buildRows(copies: number): DataRow[] {
-  return Array.from({ length: copies }).flatMap((_, copy) =>
-    SAMPLE_ROWS.map((row) =>
-      copy === 0 ? row : { ...row, Roll: `${row.Roll}-${copy + 1}`, ID: `${row.ID}-${copy + 1}` },
-    ),
-  );
+function buildRows(copies: number, count: number): DataRow[] {
+  return Array.from({ length: copies })
+    .flatMap((_, copy) =>
+      SAMPLE_ROWS.map((row) =>
+        copy === 0 ? row : { ...row, Roll: `${row.Roll}-${copy + 1}`, ID: `${row.ID}-${copy + 1}` },
+      ),
+    )
+    .slice(0, count);
 }
 
 function formatBytes(bytes: number): string {
@@ -85,14 +93,14 @@ function formatBytes(bytes: number): string {
 }
 
 export function Playground() {
-  const [mode, setMode] = useState<OutputMode>('separate');
+  const [mode, setMode] = useState<PlaygroundMode>('separate');
   const [copies, setCopies] = useState(1);
   const [status, setStatus] = useState<Status>({ kind: 'idle' });
   const [files, setFiles] = useState<LinkedFile[]>([]);
 
   const engine = useRef<PdfEngineClient | null>(null);
   const assets = useRef<Promise<Assets> | null>(null);
-  const job = useRef<GenerationJobHandle | null>(null);
+  const job = useRef<Pick<GenerationJobHandle, 'cancel'> | null>(null);
   const objectUrls = useRef<string[]>([]);
 
   useEffect(() => {
@@ -117,12 +125,40 @@ export function Playground() {
       engine.current ??= createPdfEngineClient();
       assets.current ??= loadAssets();
       const { templatePdf, fonts } = await assets.current;
+      const size = BATCH_SIZES.find((entry) => entry.copies === copies) ?? BATCH_SIZES[0]!;
+      const rows = buildRows(size.copies, size.rows);
 
-      job.current = engine.current.generate(
+      if (mode === 'zip') {
+        // Assets are copied into the worker, so the cached originals stay usable.
+        const batch = engine.current.generatePdfBatch(
+          SAMPLE_TEMPLATE,
+          rows,
+          {
+            assets: { templatePdf, fonts },
+            zipFileName: 'Class 10 - certificates and reports.zip',
+          },
+          { onProgress: (progress) => setStatus({ kind: 'running', progress }) },
+        );
+        job.current = batch;
+        const { zip, zipFileName, fileCount: count, summary } = await batch.result;
+        let zipLink: RunOutcome['zip'];
+        if (zip) {
+          const url = URL.createObjectURL(zip);
+          objectUrls.current.push(url);
+          zipLink = { url, fileName: zipFileName };
+        }
+        setStatus({
+          kind: 'done',
+          outcome: { result: summary, fileCount: count, totalBytes: zip?.size ?? 0, zip: zipLink },
+        });
+        return;
+      }
+
+      const handle = engine.current.generate(
         {
           template: SAMPLE_TEMPLATE,
           assets: { templatePdf, fonts },
-          rows: buildRows(copies),
+          rows,
           options: {
             mode,
             mergedFileName: 'Class 10 - certificates and reports',
@@ -155,7 +191,8 @@ export function Playground() {
         },
       );
 
-      const result = await job.current.result;
+      job.current = handle;
+      const result = await handle.result;
       setStatus({ kind: 'done', outcome: { result, fileCount, totalBytes } });
     } catch (error) {
       const details =
@@ -175,7 +212,7 @@ export function Playground() {
   const running = status.kind === 'running';
   const progress = running ? status.progress : null;
   const outcome = status.kind === 'done' ? status.outcome : null;
-  const totalRows = SAMPLE_ROWS.length * copies;
+  const totalRows = (BATCH_SIZES.find((entry) => entry.copies === copies) ?? BATCH_SIZES[0]!).rows;
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-8 sm:py-12">
@@ -194,11 +231,12 @@ export function Playground() {
       <section className="flex flex-col gap-4 rounded-2xl border border-neutral-200 p-4 dark:border-neutral-800">
         <fieldset className="flex flex-col gap-2" disabled={running}>
           <legend className="mb-2 text-sm font-medium">Output</legend>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             {(
               [
                 ['separate', 'One PDF per student'],
                 ['merged', 'One PDF to print'],
+                ['zip', 'ZIP of PDFs'],
               ] as const
             ).map(([value, label]) => (
               <button
@@ -221,7 +259,7 @@ export function Playground() {
 
         <fieldset className="flex flex-col gap-2" disabled={running}>
           <legend className="mb-2 text-sm font-medium">Batch size</legend>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {BATCH_SIZES.map((size) => (
               <button
                 key={size.copies}
@@ -235,7 +273,7 @@ export function Playground() {
                     : 'border-neutral-300 hover:border-neutral-500 dark:border-neutral-700'
                 }`}
               >
-                {size.label}
+                {size.rows.toLocaleString('en-IN')} rows
               </button>
             ))}
           </div>
@@ -325,6 +363,16 @@ function Summary({ outcome }: { outcome: RunOutcome }) {
       data-cancelled={result.cancelled}
       className="rounded-2xl border border-neutral-200 p-4 dark:border-neutral-800"
     >
+      {outcome.zip && (
+        <a
+          data-testid="zip-link"
+          href={outcome.zip.url}
+          download={outcome.zip.fileName}
+          className="mb-3 inline-flex rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700"
+        >
+          Download {outcome.zip.fileName}
+        </a>
+      )}
       <h2 className="mb-3 text-sm font-medium">
         {result.cancelled
           ? 'Cancelled'

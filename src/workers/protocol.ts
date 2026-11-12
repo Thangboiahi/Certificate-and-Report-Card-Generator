@@ -53,8 +53,49 @@ export interface WorkerError {
 
 export type WorkerOutcome<T> = { ok: true; value: T } | { ok: false; error: WorkerError };
 
+/** Everything `generatePdfBatch` needs besides the template and the rows. */
+export interface PdfBatchSettings {
+  /** Chosen by the caller; used to cancel this batch. */
+  jobId: string;
+  /** The template's background PDF and font files. */
+  assets: EngineAssets;
+  /**
+   * Defaults: one PDF per row (`mode: 'separate'`). `merged` puts the rows into one or more print
+   * files (`rowsPerFile`), which then go into the ZIP. `signal` cannot cross the boundary.
+   */
+  options?: Omit<GenerationOptions, 'signal'>;
+  localImages?: Record<string, ArrayBuffer>;
+  imageProxyUrl?: string;
+  /** Name for the ZIP. Defaults to "documents.zip". */
+  zipFileName?: string;
+}
+
+export interface PdfBatchCallbacks {
+  /** At most about ten times a second, plus once for the last row. Not awaited. */
+  onProgress?(progress: GenerationProgress): void;
+  /** Only needed if the image proxy is called without a session cookie. */
+  getAuthToken?(): Promise<string | null>;
+}
+
+export interface PdfBatchResult {
+  /** The ZIP of every generated PDF; `null` when the batch was cancelled. */
+  zip: Blob | null;
+  zipFileName: string;
+  /** Number of PDFs inside the ZIP. */
+  fileCount: number;
+  summary: GenerationResult;
+}
+
 /** What the worker exposes through comlink. */
 export interface PdfEngineWorkerApi {
+  /** Generates every row and returns a single ZIP (as a Blob, so it stays off the JS heap). */
+  generatePdfBatch(
+    template: TemplateDefinition,
+    dataRows: DataRow[],
+    settings: PdfBatchSettings,
+    callbacks?: PdfBatchCallbacks,
+  ): Promise<WorkerOutcome<PdfBatchResult>>;
+  /** Lower-level streaming API: each finished PDF is handed to `onDocument`. */
   generate(
     request: WorkerGenerationRequest,
     callbacks: WorkerCallbacks,
