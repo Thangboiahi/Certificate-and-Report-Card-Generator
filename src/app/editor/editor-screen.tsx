@@ -14,6 +14,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import { AiMagicButton } from '@/components/canvas/AiMagicButton';
 import { EditorGateway, type EditorSession } from '@/components/canvas/EditorGateway';
+import { ManualEntryPanel } from '@/components/canvas/ManualEntryPanel';
 import { MobileEditor } from '@/components/canvas/MobileEditor';
 import { PropertyBar } from '@/components/canvas/PropertyBar';
 import { SmartAuditCarousel } from '@/components/canvas/SmartAuditCarousel';
@@ -107,7 +108,8 @@ export function EditorScreen() {
 
   async function exportTestPdf() {
     const { activeTemplate, dataRows } = useTemplateStore.getState();
-    const row = dataRows[rowIndex];
+    // With no data at all, test with a blank record: fields print empty.
+    const row = dataRows[rowIndex] ?? (dataRows.length === 0 ? {} : undefined);
     if (!activeTemplate || !row || !session) return;
     setExporting(true);
     setMessage(null);
@@ -270,6 +272,7 @@ export function EditorScreen() {
           </button>
         </div>
         {replacingData && <UniversalUploadZone accept={['csv']} onConfirm={applyUploadedCsv} />}
+        <ManualEntryPanel rowIndex={rowIndex} />
         {reviewing && <SmartAuditCarousel row={rowIndex} onRowChange={setRowIndex} />}
       </section>
       <PropertyBar />
