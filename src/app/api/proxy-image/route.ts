@@ -6,7 +6,10 @@
  * cross-origin image unless that site opts in (CORS), and most do not. This route fetches the
  * image server-side and relays it from our own origin, so the Worker can read it.
  *
- * Request:   `Authorization: Bearer <Firebase ID token>`
+ * Request:   same-origin, with the session cookie (sent by the browser automatically), or
+ *            `Authorization: Bearer <Firebase ID token>`.
+ * CORS:      none, deliberately. The Worker calls this from our own origin, and same-origin
+ *            responses never taint a canvas; permissive CORS would only let other sites use it.
  * Success:   200 with the raw image bytes — read them with `response.arrayBuffer()`.
  * Failure:   JSON `{ "error": { "code", "message" } }` with a 4xx/5xx status.
  *
