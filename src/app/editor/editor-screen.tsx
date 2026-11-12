@@ -9,7 +9,14 @@
  * Nothing is stored yet: leaving the editor, or "Back", discards the template (storage arrives in
  * a later phase). The built-in sample is available only as an explicit choice in the gateway.
  */
-import { ChevronLeft, ChevronRight, FileDown, LoaderCircle } from 'lucide-react';
+import {
+  ChevronLeft,
+  ChevronRight,
+  FileArchive,
+  FileDown,
+  LoaderCircle,
+  QrCode,
+} from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
 import { AiMagicButton } from '@/components/canvas/AiMagicButton';
@@ -22,6 +29,8 @@ import { UniversalUploadZone, type ConfirmedUpload } from '@/components/ui/Unive
 import { placeholdersForColumns, templateTitle } from '@/lib/editor/starter-template';
 import { createPdfEngineClient, saveBlob, type PdfEngineClient } from '@/lib/pdfEngine';
 import { notifyError, notifySuccess } from '@/lib/ui/notify';
+import { sampleVerificationRow, usesVerification, verificationQr } from '@/lib/verify/template';
+import { guessNameColumn, premintVerification } from '@/lib/verifyClient';
 import { cn } from '@/lib/utils/cn';
 import { useTemplateStore } from '@/store/templateStore';
 
@@ -53,6 +62,8 @@ export function EditorScreen() {
   const [rowIndex, setRowIndex] = useState(0);
   const [exporting, setExporting] = useState(false);
   const [reviewing, setReviewing] = useState(false);
+  const [batch, setBatch] = useState<{ done: number; total: number } | null>(null);
+  const batchJob = useRef<{ cancel(): void } | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const engine = useRef<PdfEngineClient | null>(null);
 
@@ -60,6 +71,7 @@ export function EditorScreen() {
     // Always start at the gateway, even if an earlier visit left a template in the store.
     useTemplateStore.getState().reset();
     return () => {
+      batchJob.current?.cancel();
       engine.current?.dispose();
       engine.current = null;
       useTemplateStore.getState().reset();
@@ -106,29 +118,53 @@ export function EditorScreen() {
     notifySuccess(`Loaded ${upload.data.rows.length} rows from ${upload.file.name}.`);
   }
 
+  /** The template's background and fonts, as copies the worker may take. */
+  async function loadAssets(current: EditorSession) {
+    const fontIds = Object.keys(current.fontUrls);
+    const [templatePdf, ...fontFiles] = await Promise.all([
+      // The engine takes ownership of what it is given: hand it a copy of uploaded bytes.
+      typeof current.pdf === 'string' ? fetchBytes(current.pdf) : current.pdf.slice(0),
+      ...fontIds.map((id) => fetchBytes(current.fontUrls[id]!)),
+    ]);
+    return {
+      templatePdf: templatePdf!,
+      fonts: Object.fromEntries(fontIds.map((id, index) => [id, fontFiles[index]!])),
+    };
+  }
+
+  /** Adds a QR code that prints each document's verification address (ADR-035). */
+  function addVerificationQr() {
+    const state = useTemplateStore.getState();
+    const template = state.activeTemplate;
+    const page = template?.pages[0];
+    if (!template || !page) return;
+    if (usesVerification(template.placeholders)) {
+      notifySuccess('This template already has a verification QR code.');
+      return;
+    }
+    state.addPlaceholders([verificationQr(page, new Set(template.placeholders.map((p) => p.id)))]);
+    notifySuccess('Added a verification QR code. Drag it where you want it.');
+  }
+
   async function exportTestPdf() {
     const { activeTemplate, dataRows } = useTemplateStore.getState();
     // With no data at all, test with a blank record: fields print empty.
-    const row = dataRows[rowIndex] ?? (dataRows.length === 0 ? {} : undefined);
-    if (!activeTemplate || !row || !session) return;
+    const stored = dataRows[rowIndex] ?? (dataRows.length === 0 ? {} : undefined);
+    if (!activeTemplate || !stored || !session) return;
+    // A test must not create real verification ids: the QR gets a sample address that will not verify.
+    const row = usesVerification(activeTemplate.placeholders)
+      ? { ...sampleVerificationRow(window.location.origin), ...stored }
+      : stored;
     setExporting(true);
     setMessage(null);
     try {
-      const fontIds = Object.keys(session.fontUrls);
-      const [templatePdf, ...fontFiles] = await Promise.all([
-        // The engine takes ownership of what it is given: hand it a copy of uploaded bytes.
-        typeof session.pdf === 'string' ? fetchBytes(session.pdf) : session.pdf.slice(0),
-        ...fontIds.map((id) => fetchBytes(session.fontUrls[id]!)),
-      ]);
+      const assets = await loadAssets(session);
       engine.current ??= createPdfEngineClient();
       let saved = false;
       const job = engine.current.generate(
         {
           template: activeTemplate,
-          assets: {
-            templatePdf: templatePdf!,
-            fonts: Object.fromEntries(fontIds.map((id, index) => [id, fontFiles[index]!])),
-          },
+          assets,
           rows: [row],
           options: { mode: 'separate' },
         },
@@ -155,6 +191,61 @@ export function EditorScreen() {
       notifyError(error, 'The test PDF could not be generated.');
     } finally {
       setExporting(false);
+    }
+  }
+
+  /**
+   * Generates every row into one ZIP. If the template prints a verification QR, each row first gets
+   * its own pre-minted id from the server, so the codes on the PDFs already work when they are made.
+   */
+  async function generateAll() {
+    const { activeTemplate, dataRows } = useTemplateStore.getState();
+    if (!activeTemplate || !session) return;
+    if (dataRows.length === 0) {
+      notifyError(null, 'Add your data first: upload a CSV, or enter it by hand.');
+      return;
+    }
+    setBatch({ done: 0, total: dataRows.length });
+    setMessage(null);
+    try {
+      let rows = dataRows;
+      if (usesVerification(activeTemplate.placeholders)) {
+        setMessage('Creating verification codes…');
+        rows = await premintVerification({
+          rows: dataRows,
+          credentialName: templateTitle(activeTemplate),
+          nameColumn: guessNameColumn(dataRows),
+        });
+        // Keep the ids with the data, so generating again reuses them instead of minting more.
+        useTemplateStore.getState().setDataRows(rows);
+      }
+      const assets = await loadAssets(session);
+      engine.current ??= createPdfEngineClient();
+      const handle = engine.current.generatePdfBatch(
+        activeTemplate,
+        rows,
+        { assets, zipFileName: `${templateTitle(activeTemplate)}.zip` },
+        { onProgress: (p) => setBatch({ done: p.completedRows, total: p.totalRows }) },
+      );
+      batchJob.current = handle;
+      setMessage(null);
+      const result = await handle.result;
+      if (result.zip) {
+        saveBlob(result.zip, result.zipFileName);
+        const failed = result.summary.failedRows;
+        setMessage(
+          `Made ${result.fileCount} PDF${result.fileCount === 1 ? '' : 's'}${failed ? `, ${failed} could not be made` : ''}.`,
+        );
+      } else {
+        setMessage('Cancelled. Nothing was downloaded.');
+      }
+    } catch (error) {
+      console.error(error);
+      setMessage('The batch could not be generated.');
+      notifyError(error, 'The batch could not be generated.');
+    } finally {
+      batchJob.current = null;
+      setBatch(null);
     }
   }
 
@@ -270,6 +361,35 @@ export function EditorScreen() {
           >
             {rowCount ? 'Replace data (CSV)' : 'Add data (CSV)'}
           </button>
+          <button
+            type="button"
+            onClick={addVerificationQr}
+            data-testid="add-verification-qr"
+            className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-neutral-300 px-4 text-sm hover:border-neutral-500 dark:border-neutral-700"
+          >
+            <QrCode className="size-4" aria-hidden /> Add verification QR
+          </button>
+          {batch ? (
+            <button
+              type="button"
+              onClick={() => batchJob.current?.cancel()}
+              data-testid="cancel-batch"
+              className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-neutral-300 px-4 text-sm dark:border-neutral-700"
+            >
+              <LoaderCircle className="size-4 animate-spin" aria-hidden />
+              {batch.done}/{batch.total} · Cancel
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={generateAll}
+              disabled={exporting}
+              data-testid="generate-all"
+              className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+            >
+              <FileArchive className="size-4" aria-hidden /> Generate all (ZIP)
+            </button>
+          )}
         </div>
         {replacingData && <UniversalUploadZone accept={['csv']} onConfirm={applyUploadedCsv} />}
         <ManualEntryPanel rowIndex={rowIndex} />

@@ -1,4 +1,4 @@
-import { BadgeCheck, Clock, ShieldAlert } from 'lucide-react';
+import { BadgeCheck, Clock, FileCheck2, ShieldAlert } from 'lucide-react';
 
 import { AddToLinkedIn } from '@/components/verify/AddToLinkedIn';
 import type { VerificationState } from '@/lib/vault/verification';
@@ -37,6 +37,22 @@ export function VerificationResult({
           <div>
             <p className="text-lg font-bold">Verified</p>
             <p className="text-sm">The issuer’s record matches this credential.</p>
+          </div>
+        </div>
+      )}
+      {state === 'unclaimed' && (
+        <div
+          role="status"
+          data-testid="verdict"
+          className="flex items-start gap-3 rounded-2xl bg-sky-50 p-4 text-sky-950 dark:bg-sky-950 dark:text-sky-100"
+        >
+          <FileCheck2 className="mt-0.5 size-8 shrink-0 text-sky-600" aria-hidden />
+          <div>
+            <p className="text-lg font-bold">Issued, not yet claimed</p>
+            <p className="text-sm">
+              {credential.issuerName} recorded issuing this credential. Its holder has not added it
+              to their vault yet, so there is nothing more to check.
+            </p>
           </div>
         </div>
       )}
@@ -88,7 +104,7 @@ export function VerificationResult({
         </dd>
         <dt className="text-neutral-500">Recipient</dt>
         <dd className="font-medium">{credential.recipientName ?? 'Not shown by the issuer'}</dd>
-        <dt className="text-neutral-500">Issued</dt>
+        <dt className="text-neutral-500">{state === 'unclaimed' ? 'Recorded' : 'Issued'}</dt>
         <dd className="font-medium">{DATE.format(credential.issuedAt)}</dd>
         {credential.expiresAt && (
           <>
@@ -127,7 +143,7 @@ function CertificatePreview({
       aria-label={`Preview of ${credential.credentialName}`}
       className={cn(
         'relative overflow-hidden rounded-2xl border-4 border-double p-6 text-center',
-        state === 'valid'
+        state === 'valid' || state === 'unclaimed'
           ? 'border-neutral-300 bg-white dark:border-neutral-700 dark:bg-neutral-950'
           : 'border-neutral-300 bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-900',
       )}
@@ -147,7 +163,7 @@ function CertificatePreview({
         </>
       )}
       <p className="mt-4 text-xs text-neutral-500">{DATE.format(credential.issuedAt)}</p>
-      {state !== 'valid' && (
+      {(state === 'revoked' || state === 'expired') && (
         <span
           aria-hidden
           className={cn(
