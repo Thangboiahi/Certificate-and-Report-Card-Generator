@@ -3,9 +3,8 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Suspense } from 'react';
 
-import { KanbanBoard } from '@/components/dashboard/KanbanBoard';
 import { LedgerSection } from '@/components/dashboard/LedgerSection';
-import { sampleRequests } from '@/components/dashboard/sample-requests';
+import { RequestsSection } from '@/components/dashboard/RequestsSection';
 import { requireRouteAccess } from '@/lib/auth/session';
 import { requestTime } from '@/lib/server/request-time';
 
@@ -23,9 +22,7 @@ async function IssueHome() {
       >
         Issuing as {user.email ?? user.uid}
       </p>
-      <h2 className="mt-4 text-sm font-medium text-neutral-500">Credential requests</h2>
-      <p className="text-xs text-neutral-500">Sample requests — moves are not saved yet.</p>
-      <KanbanBoard initialRequests={sampleRequests(renderedAt)} renderedAt={renderedAt} />
+      <RequestsSection user={user} renderedAt={renderedAt} />
       <LedgerSection user={user} renderedAt={renderedAt} />
     </>
   );
@@ -50,8 +47,10 @@ export default function IssuePage() {
               <FileText className="size-5" aria-hidden />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block font-medium">Sample certificate and report card</span>
-              <span className="block text-xs text-neutral-500">2 pages · 18 fields</span>
+              <span className="block font-medium">Template editor</span>
+              <span className="block text-xs text-neutral-500">
+                Upload a blank certificate, card or report and place your fields
+              </span>
             </span>
             <PenLine className="size-4 text-neutral-400" aria-hidden />
           </Link>

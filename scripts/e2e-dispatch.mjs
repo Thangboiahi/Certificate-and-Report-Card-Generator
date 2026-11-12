@@ -22,7 +22,7 @@ import { fileURLToPath } from 'node:url';
 
 import { initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
-import { getFirestore } from 'firebase-admin/firestore';
+import { getFirestore, Timestamp } from 'firebase-admin/firestore';
 
 const PROJECT_ID = 'demo-v6';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -495,10 +495,78 @@ try {
     }
 
     console.log('\nKanban board (Chromium)');
+    // The board reads real documents: put the six demo cards in school-a's board before each run,
+    // because a drag now persists.
+    const seedBoard = async () => {
+      const existing = await db
+        .collection('credential_requests')
+        .where('ownerKey', '==', 'inst:school-a')
+        .get();
+      await Promise.all(existing.docs.map((doc) => doc.ref.delete()));
+      const now = Date.now();
+      const cards = [
+        ['rq-101', 'new', 0, 'Aarav Sharma', 'Class 10 certificate', { phone: '9876543210' }, 1],
+        ['rq-102', 'new', 1, 'Fatima Sheikh', 'Bonafide letter', { email: 'fatima@example.in' }, 5],
+        [
+          'rq-103',
+          'pending_data',
+          0,
+          'Rahul Verma',
+          'Class 10 certificate',
+          { note: 'Photo missing' },
+          26,
+        ],
+        [
+          'rq-104',
+          'pending_data',
+          1,
+          'Meera Nair',
+          'Sports participation',
+          { note: 'Date of birth to confirm' },
+          50,
+        ],
+        [
+          'rq-105',
+          'ready',
+          0,
+          'Priyanka Tripathi',
+          'Class 10 certificate',
+          { email: 'priyanka@example.in' },
+          3,
+        ],
+        [
+          'rq-106',
+          'issued',
+          0,
+          'Venkata Subramanian',
+          'Olympiad merit certificate',
+          { phone: '9000000001' },
+          80,
+        ],
+      ];
+      for (const [id, stage, position, recipientName, credential, extra, age] of cards) {
+        const at = Timestamp.fromMillis(now - age * 3_600_000);
+        await db
+          .collection('credential_requests')
+          .doc(id)
+          .set({
+            ownerKey: 'inst:school-a',
+            stage,
+            order: position * 1024,
+            recipientName,
+            credential,
+            ...extra,
+            createdByUid: 'seed',
+            createdAt: at,
+            updatedAt: at,
+          });
+      }
+    };
     for (const [label, options] of [
       ['desktop', { viewport: { width: 1280, height: 900 } }],
       ['phone', { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }],
     ]) {
+      await seedBoard();
       const context = await browser.newContext(options);
       await context.addCookies([
         { name: '__session', value: people.staff.cookie, url: server.origin },
@@ -536,6 +604,18 @@ try {
           (await cardIn('ready', 'rq-101').count()) === 1 && (await count('new')) === 1,
           'mouse: New Requests → Ready to Issue',
         );
+        // The move is saved: it is in Firestore, and survives a reload.
+        await page.waitForTimeout(500);
+        check(
+          (await db.collection('credential_requests').doc('rq-101').get()).get('stage') === 'ready',
+          'mouse move persisted to Firestore',
+        );
+        await page.reload();
+        await page.getByTestId('kanban-board').waitFor();
+        check(
+          (await cardIn('ready', 'rq-101').count()) === 1,
+          'moved card is still there after a reload',
+        );
         // Keyboard: Space lifts, → moves one column, Space drops.
         await cardIn('ready', 'rq-105').focus();
         await page.keyboard.press('Space');
@@ -549,6 +629,12 @@ try {
         check(
           (await cardIn('issued', 'rq-105').count()) === 1 && (await count('issued')) === 2,
           'keyboard: Ready to Issue → Issued',
+        );
+        await page.waitForTimeout(500);
+        check(
+          (await db.collection('credential_requests').doc('rq-105').get()).get('stage') ===
+            'issued',
+          'keyboard move persisted to Firestore',
         );
         await page.waitForTimeout(400);
         await page.screenshot({ path: join(out, 'e2e-kanban-desktop.png') });
