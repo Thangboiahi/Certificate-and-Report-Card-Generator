@@ -3,20 +3,29 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Suspense } from 'react';
 
+import { KanbanBoard } from '@/components/dashboard/KanbanBoard';
+import { sampleRequests } from '@/components/dashboard/sample-requests';
 import { requireRouteAccess } from '@/lib/auth/session';
+import { requestTime } from '@/lib/server/request-time';
 
 export const metadata: Metadata = { title: 'Issue Credentials' };
 
 async function IssueHome() {
   const user = await requireRouteAccess('/dashboard/issue');
+  const renderedAt = requestTime();
   return (
-    <p
-      data-testid="guarded"
-      data-role={user.role}
-      className="text-sm text-neutral-600 dark:text-neutral-400"
-    >
-      Issuing as {user.email ?? user.uid}
-    </p>
+    <>
+      <p
+        data-testid="guarded"
+        data-role={user.role}
+        className="text-sm text-neutral-600 dark:text-neutral-400"
+      >
+        Issuing as {user.email ?? user.uid}
+      </p>
+      <h2 className="mt-4 text-sm font-medium text-neutral-500">Credential requests</h2>
+      <p className="text-xs text-neutral-500">Sample requests — moves are not saved yet.</p>
+      <KanbanBoard initialRequests={sampleRequests(renderedAt)} renderedAt={renderedAt} />
+    </>
   );
 }
 
