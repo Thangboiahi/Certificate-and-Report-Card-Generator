@@ -5,6 +5,29 @@ was verified, and what is left open. The line-by-line history is in git; this fi
 
 ---
 
+## 2026-11-12 — Session 13: Pre-flight verification and build audit (no feature work)
+
+**Checked.** `npm run build` (Next 16.4.6, Turbopack): compiled, TypeScript clean, 25 static pages generated,
+all 9 phases' routes present. `npm run lint`, `npm run typecheck`, `npm run format:check`: clean. `npm test`:
+567/567. `npm run test:emulator`: 70/70 (claims, sessions, proxy, Firestore rules). No build error occurred, so
+no code was changed.
+
+**Routing.** This is Next.js 16: the gate is `src/proxy.ts` (the old `middleware.ts`) driven by `ROUTE_RULES` in
+`src/lib/auth/access.ts`. Production server smoke test: protected paths redirect once to `/login?next=…`;
+`/claim/{token}`, `/v/{shareId}`, `/editor` and the API routes are not gated (the Razorpay webhook must be reachable and
+verifies its own signature; unsigned POST gives 503 without a secret, failing closed). Claim sign-in sets the session
+cookie before linking to `/dashboard/vault`. No loop exists. **But `/login` is a 404** (BUGS B-001, known open item).
+
+**Types.** `src/types/roles.ts` and `firebase/firestore.rules` agree on claim keys (`role`, `institutionId`), role
+names and all seven collection names; `claim_orders` and the other ledgers are server-only in the rules; the payment
+and mint code use `COLLECTIONS`, `IssuerType`, `ClaimAddOn` from the shared types.
+
+**Not verified.** Nothing ran against real Razorpay, Gemini, Meta or Resend (keys not yet available). Real phone not tested.
+
+**Open.** Build `/login`; then live key injection (E13, E17, E18, E20).
+
+---
+
 ## 2026-11-12 — Session 12: Phase 9, AI enrichment and Smart Audit
 
 **Built.** `src/lib/ai/`: `schema.ts` (limits, zod schemas, `AuditPatch`, `buildAuditContext`,

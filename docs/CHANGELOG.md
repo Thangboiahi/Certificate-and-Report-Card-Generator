@@ -4,6 +4,8 @@ Newest first. Per-change detail: git history and the repository-root `CHANGELOG.
 
 ## Completed
 
+- **Pre-flight audit:** production build, lint, typecheck, 567 unit and 70 emulator tests all pass; routing and role/claim contract checked. No code changes. One open gap: `/login` page missing (BUGS B-001).
+
 - **Phase 9 — AI Enrichment & Smart Audit:** `src/lib/ai/*`, `/api/ai/enrich`, `/api/ai/audit`,
   `SmartAuditCarousel`, `AiMagicButton` (ADR-029). Verified with mocked Gemini and a stubbed UI run;
   **not** run against the real Gemini API; per-user metering open.
@@ -32,4 +34,4 @@ Newest first. Per-change detail: git history and the repository-root `CHANGELOG.
 
 ## In progress
 
-- Nothing. Next: Phase 9 (waiting for the brief).
+- Nothing. Next: `/login` page, then live API keys.
