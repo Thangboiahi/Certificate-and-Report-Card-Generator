@@ -183,6 +183,9 @@ describe.skipIf(!HAS_EMULATORS)('with the Firebase emulators', () => {
         email: 'staff2@example.in',
         role: 'inst_staff',
         institutionId: 'school-b',
+        // Since Phase 7 the session also says how the person proved who they are.
+        phoneNumber: null,
+        emailVerified: false,
       });
     });
 
