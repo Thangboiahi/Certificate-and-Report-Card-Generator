@@ -3,7 +3,7 @@
 The single place to see what we are building, where we are, what comes next, and what is waiting
 on a decision. Updated at the end of every working session.
 
-**Last updated:** 2026-11-12 (session 7 — Phase 5, CRM Kanban and dispatch)
+**Last updated:** 2026-11-12 (session 8 — Phase 6, audit logs and time-locked claims)
 
 Related records: [ARCHITECTURE.md](./ARCHITECTURE.md) (how it works) ·
 [DECISIONS.md](./DECISIONS.md) (why) · [DEVLOG.md](./DEVLOG.md) (history)
@@ -65,7 +65,8 @@ Status key: ✅ done and verified · 🟡 in progress · ⬜ not started
 | 3     | Core PDF Engine (Web Worker, ZIP, image proxy) | ✅                                     |
 | 4     | Canvas UI & Workspace Toggles                  | ✅ (real-phone check open)             |
 | 5     | CRM & Kanban Dashboards (dispatch)             | ✅ (live provider accounts open)       |
-| 6–9   | To be briefed                                  | ⬜                                     |
+| 6     | Audit Logs & Time-Locked Claims                | ✅ (claim page, scheduler open)        |
+| 7–9   | To be briefed                                  | ⬜                                     |
 
 ### Phase 1 — RBAC & Foundation (two items open)
 
@@ -134,6 +135,20 @@ Decisions in ADR-024 and ADR-025.
 | Claim tokens: issuing, storing, `/claim/{token}` page and QR                                           | ⬜ not briefed   |
 | Reconciling dispatches left `sending` after a crash                                                    | ⬜ before launch |
 
+### Phase 6 — Audit Logs & Time-Locked Claims
+
+Decision in ADR-026.
+
+| Item                                                                                                                | Status         |
+| ------------------------------------------------------------------------------------------------------------------- | -------------- |
+| `src/types/audit.ts`: `IssuedBatchSchema` (id, issuerUid, templateId, recipientCount, dispatchedAt, tokenExpiry, …) | ✅             |
+| `src/lib/utils/tokenManager.ts`: mint, hash, expiry check, `verifyClaimToken`, `purgeExpiredClaimTokens`            | ✅             |
+| `AuditLedger` (shadcn data table) with "1-Click Re-Issue" — no credits, 3 per batch, 10-minute cooldown             | ✅             |
+| `POST /api/dispatch/reissue`, `POST /api/cron/purge-claim-tokens` (CRON_SECRET)                                     | ✅             |
+| Dispatch mints and stores hashed claim tokens and writes the ledger                                                 | ✅             |
+| Cloud Scheduler job calling the purge route daily                                                                   | ⬜ when live   |
+| Claim flow: `/claim/{token}` page, QR, setting `claimedAt`, creating the vault item                                 | ⬜ not briefed |
+
 ### Foundation already built (before the phase plan)
 
 Available to every phase; verified in sessions 1–2:
@@ -159,7 +174,7 @@ Available to every phase; verified in sessions 1–2:
 
 | #   | Item                                                                                                        | Needed when                    |
 | --- | ----------------------------------------------------------------------------------------------------------- | ------------------------------ |
-| P   | Briefs for Phases 6–9                                                                                       | Before each phase              |
+| P   | Briefs for Phases 7–9                                                                                       | Before each phase              |
 | E17 | Meta WhatsApp Business: verified business, sender number, approved Utility template (4 parameters, ADR-024) | Before real WhatsApp dispatch  |
 | E18 | Resend account with a verified sending domain and the sender address                                        | Before real email dispatch     |
 | E3  | Region — recommended **asia-south1 (Mumbai)**; Firestore's region is permanent                              | When a live project is created |
@@ -237,6 +252,7 @@ phase.
 | Q4  | Should institution staff and admins also issue credentials personally (Micro-Issuer workspace)?  | Today every signed-in person sees both workspaces (ADR-023). Decide with the institution phase.                                                                                                                                                     |
 | Q5  | Price of a dispatched message (credits per WhatsApp / email)? Placeholder: 1 credit each.        | Decide with pricing (E12). WhatsApp Utility messages cost the business money per message in India.                                                                                                                                                  |
 | Q6  | Should Micro-Issuers (no institution, no credits) be able to dispatch?                           | Today only institution admins and staff can (ADR-024).                                                                                                                                                                                              |
+| Q7  | Retention: claim links last ≤ 90 days; recipient data is purged 30 days after expiry. Confirm.   | Chosen for DPDP minimisation (ADR-026); also needs the privacy policy (E15).                                                                                                                                                                        |
 | Q1  | Should free-tier documents carry a watermark?                                                    | Open — pricing decision (E12).                                                                                                                                                                                                                      |
 | Q2  | Is a desktop-first power-user mode needed alongside mobile-first?                                | Open — depends on who the first customers are.                                                                                                                                                                                                      |
 

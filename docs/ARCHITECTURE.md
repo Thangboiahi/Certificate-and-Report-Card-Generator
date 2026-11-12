@@ -1,6 +1,6 @@
 # Architecture
 
-How the system works **today** (end of session 7, Phase 5). Reasons for the choices are in
+How the system works **today** (end of session 8, Phase 6). Reasons for the choices are in
 [DECISIONS.md](./DECISIONS.md); status and roadmap are in [PLAN.md](./PLAN.md).
 
 ## Overview
@@ -191,17 +191,34 @@ ADR-023.
 POST /api/dispatch/{whatsapp|email}   (institution admin/staff, session cookie, same-origin)
   │ validate body (≤ 500 targets, phone/email, claim token, expiry in future, no duplicates)
   ▼
-Tx 1: membership ✓ verified ✓ balance ≥ n ✓ → creditBalance −= n, dispatches/{id} = sending
+Tx 1: membership ✓ verified ✓ template ✓ balance ≥ n ✓ → creditBalance −= n,
+      dispatches/{id} = sending, issued_batches/{id} = sending
+  ▼
+mint n tokens (256-bit) → claim_tokens/{sha256} = recipient, expiresAt, purgeAfter
   ▼
 provider: Meta Cloud API (8 parallel)  |  Resend batch (100 per call, idempotency key)
   ▼
-Tx 2: creditBalance += failed, dispatches/{id} = completed + per-recipient results
+Tx 2: creditBalance += failed, dispatches/{id} = completed + per-recipient results,
+      issued_batches/{id} = completed + counts
 ```
 
 `id = sha256(institution, channel, idempotencyKey)`: a repeated key returns the stored outcome
 without sending or charging. Links are `APP_ORIGIN/claim/{token}`. Environment variables in
 `.env.example`; each channel returns 503 until configured. `dispatches` is server-only in the
 Firestore rules. ADR-024.
+
+## Audit ledger and claim tokens (Phase 6)
+
+- `issued_batches/{id}`: one per dispatch; read server-side by `listIssuedBatches` and shown by
+  `AuditLedger` (TanStack Table) on `/dashboard/institution` and `/dashboard/issue`.
+- `claim_tokens/{sha256(token)}`: recipient name and contact, `expiresAt`, `purgeAfter`
+  (= expiry + 30 days), `claimedAt`. `verifyClaimToken` refuses expired tokens immediately.
+- `POST /api/dispatch/reissue {batchId}`: unclaimed recipients get fresh tokens and a new expiry
+  (now + original validity) through the original channel; no credits; ≤ 3 per batch, 10 minutes
+  apart.
+- `POST /api/cron/purge-claim-tokens` (Bearer `CRON_SECRET`, Cloud Scheduler daily): deletes
+  tokens past `purgeAfter`, marks batches with no tokens left as purged.
+- Both collections are server-only; indexes in `firebase/firestore.indexes.json`. ADR-026.
 
 ## CRM board (Phase 5)
 
@@ -233,18 +250,19 @@ Cloud Run notes for when it is deployed:
 
 ## Testing
 
-- `npm test` — 493 unit/integration tests (Node). Engine tests render PDFs with poppler
+- `npm test` — 509 unit/integration tests (Node). Engine tests render PDFs with poppler
   (`pdftoppm`/`pdftotext`) and assert on pixels and word positions; they skip without poppler.
 - `tests/showcase.test.ts` writes pictures to `tests/output/` for visual review.
 - `node scripts/e2e-playground.mjs` (after `npm run build`) — production server + Chromium.
-- `npm run test:emulator` — 43 tests against the Firebase Auth + Firestore emulators (claims,
+- `npm run test:emulator` — 50 tests against the Firebase Auth + Firestore emulators (claims,
   sessions, proxy, rules).
 - `firebase emulators:exec --only auth,firestore --project demo-v6 'node scripts/e2e-auth.mjs'`
   (after `npm run build`) — 53 auth checks against the production server, including the
   workspace toggle in Chromium.
 - `firebase emulators:exec --only auth,firestore --project demo-v6 'node scripts/e2e-dispatch.mjs'`
-  (after `npm run build`) — 28 checks: dispatch routes against a recording mock of Meta and
-  Resend, credits, and the Kanban board in Chromium.
+  (after `npm run build`) — 44 checks: dispatch routes against a recording mock of Meta and
+  Resend, credits, claim tokens, the audit ledger and re-issue, the purge route, and the Kanban
+  board in Chromium.
 - `node scripts/e2e-editor.mjs` (after `npm run build`) — the editor on a touch phone and a
   desktop: rendering, alignment, D-pad, font size, drag, tap-to-place, swipe-to-close, and the
   worker's PDF read back with `pdftotext -bbox`.

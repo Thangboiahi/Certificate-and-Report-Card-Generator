@@ -39,6 +39,7 @@ when to revisit it. This is the file to open when someone asks "why is it built 
 | 023 | Workspace toggle: one route per workspace; the tabs follow the address                 | Accepted |
 | 024 | Dispatch: credits deducted in a transaction before sending; refunds; idempotent ledger | Accepted |
 | 025 | CRM Kanban with `@hello-pangea/dnd`; optimistic moves; not persisted yet               | Accepted |
+| 026 | Audit ledger, server-minted hashed claim tokens, bounded free re-issue, purge sweep    | Accepted |
 
 ---
 
@@ -723,7 +724,8 @@ question (PLAN Q4).
 
 ## ADR-024 — Dispatch: credits deducted in a transaction before sending; refunds; idempotent ledger
 
-**Date:** 2026-11-12 · **Status:** Accepted
+**Date:** 2026-11-12 · **Status:** Accepted (request format amended by ADR-026: tokens are now
+minted by the server)
 
 **Context.** Phase 5 asked for `POST /api/dispatch/whatsapp` (Meta WhatsApp Cloud API, Utility
 template with the claim link and an expiry warning) and `POST /api/dispatch/email` (Resend), with
@@ -783,3 +785,48 @@ persists them, and a rejected promise rolls the move back with a message. Pure s
 import, Google Sheets) or who may move them, so the board shows sample requests on the
 institution dashboard and the issuer workspace. A `credential_requests` collection with rules
 comes with that brief.
+
+---
+
+## ADR-026 — Audit ledger, server-minted hashed claim tokens, bounded free re-issue, purge sweep
+
+**Date:** 2026-11-12 · **Status:** Accepted
+
+**Context.** Phase 6: track dispatched batches for "1-Click Re-Issue" without new credits, and
+enforce expiry of claim links so stale data does not pile up.
+
+**Decision.**
+
+- **Ledger.** Every dispatch writes `issued_batches/{id}` (same id as `dispatches/{id}`) in the
+  credit transaction: `issuerUid`, `templateId` (+ name), `recipientCount`, `dispatchedAt`
+  (server time), `tokenExpiry`, channel, sent/failed counts, re-issue count and outcome,
+  `purgedAt`.
+- **Tokens are minted by the server** (changes the Phase 5 request): 32 random bytes,
+  base64url. Only the SHA-256 is stored, as the id of `claim_tokens/{hash}`, with the
+  recipient's name and contact (needed to re-issue), `expiresAt`, `purgeAfter` and `claimedAt`.
+  A database leak therefore yields no working link, and a request can no longer choose a token.
+  The request names a `templateId` of the caller's institution (checked in the transaction) and
+  one `tokenExpiry` for the batch, at most 90 days ahead.
+- **Expiry is enforced at verification**, not by the sweep: `verifyClaimToken` refuses a token
+  from its expiry instant on (`now >= expiry`).
+- **Purge.** `purgeExpiredClaimTokens` deletes tokens whose `purgeAfter` (expiry + 30 days) has
+  passed, in pages, and stamps `purgedAt` on a batch once none of its tokens remain. The 30-day
+  grace keeps re-issue possible for latecomers; after it, the recipients' personal data is gone
+  (DPDP minimisation) and the ledger row stays with counts only. Run daily by Cloud Scheduler via
+  `POST /api/cron/purge-claim-tokens` with `CRON_SECRET` (constant-time comparison).
+- **Re-issue is free, so it is bounded:** unclaimed recipients only (including previously failed
+  deliveries), fresh tokens (old links die), new expiry = now + the batch's original validity,
+  through the original channel; at most 3 per batch, 10 minutes apart; a lock prevents
+  concurrent runs and is taken over after 15 minutes if its worker died. Members of the batch's
+  institution (checked against the directory) or the issuer of a personal batch; anyone else gets 404. A refused attempt is not counted.
+- `issued_batches` and `claim_tokens` are server-only in the rules; the ledger is read with the
+  Admin SDK during server rendering. Composite indexes are declared in
+  `firebase/firestore.indexes.json`.
+
+**Why not let re-issue resend the old links.** They may have expired or leaked; fresh tokens make
+the newest message the only working one.
+
+**Open.** Claiming (setting `claimedAt`, creating the vault item, the `/claim` page) is not
+built. Whether re-issues should be free without limit, or cost credits, is a pricing question
+(Q5). If the server stops mid re-issue, some recipients may hold renewed links that were never
+sent; a later re-issue covers them.

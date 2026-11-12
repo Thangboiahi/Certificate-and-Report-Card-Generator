@@ -5,6 +5,45 @@ was verified, and what is left open. The line-by-line history is in git; this fi
 
 ---
 
+## 2026-11-12 — Session 8: Phase 6, audit logs and time-locked claims
+
+**Built.**
+
+- `src/types/audit.ts`: `IssuedBatchSchema` and the claim-token document; retention and
+  re-issue limits; `reissueBlock` shared by server and table.
+- `src/lib/utils/tokenManager.ts`: 256-bit tokens, SHA-256 ids, `isTokenExpired`,
+  `verifyClaimToken`, `purgeExpiredClaimTokens` (paged, idempotent).
+- Dispatch now mints the tokens, checks the template belongs to the institution, and writes
+  `issued_batches` + `claim_tokens`. Request: `templateId` + one `tokenExpiry` (≤ 90 days);
+  recipients carry no tokens.
+- `POST /api/dispatch/reissue` (free, bounded) and `POST /api/cron/purge-claim-tokens`
+  (`CRON_SECRET`).
+- `src/components/dashboard/AuditLedger.tsx` (shadcn `table.tsx` + `@tanstack/react-table`
+  8.21.3) with "1-Click Re-Issue", on the institution dashboard and issuer workspace.
+- Rules close `issued_batches` and `claim_tokens`; `firebase/firestore.indexes.json` added.
+  ADR-026.
+
+**Verified.**
+
+- 509 unit tests (16 new): token format and uniqueness, SHA-256, expiry at the exact instant,
+  retention date, `reissueBlock` cases, new request validation (no client tokens or URLs, ≤ 90
+  days, template id).
+- 50 emulator tests (7 new): batch and hashed tokens recorded; replay mints nothing; another
+  institution's template refused with nothing charged; re-issue renews only unclaimed links,
+  charges nothing, kills old links, keeps claimed ones; cooldown, limit, 404 for outsiders,
+  "nothing to re-issue" not counted; purge respects the 30-day grace, pages, marks the batch,
+  blocks re-issue, is idempotent; ledger lists only the caller's institution.
+- `scripts/e2e-dispatch.mjs`, 44/44 on the production build: tokens stored by hash only;
+  ledger shows 2 batches with "30 days left"; clicking Re-Issue sent 3 new WhatsApp links
+  (1 undeliverable again), balance unchanged, button then in cooldown; second re-issue 409;
+  other institution 404; purge route 401 / 200 / 503 without secret. Auth e2e 53/53;
+  `npm run verify` clean.
+
+**Open.** No claim page yet (tokens are verified but nothing redeems them). Cloud Scheduler job
+to be created when a live project exists. Q7 (retention periods) for the executive.
+
+---
+
 ## 2026-11-12 — Session 7: Phase 5, CRM Kanban and dispatch
 
 **Built.**

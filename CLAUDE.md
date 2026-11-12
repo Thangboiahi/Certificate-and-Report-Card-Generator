@@ -84,6 +84,9 @@ them.
 - Anything that spends credits deducts them in a Firestore transaction **before** calling an
   outside service, records it in a server-only ledger keyed by an idempotency key, and refunds
   failures (ADR-024). Outgoing messages never contain URLs taken from the request.
+- Claim tokens are minted on the server and stored only as SHA-256 hashes; recipient data in
+  `claim_tokens` is purged 30 days after expiry (ADR-026). New Firestore queries with several
+  fields need an entry in `firebase/firestore.indexes.json`.
 
 ## Environment notes
 
