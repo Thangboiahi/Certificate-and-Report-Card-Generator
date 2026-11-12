@@ -5,6 +5,14 @@ was verified, and what is left open. The line-by-line history is in git; this fi
 
 ---
 
+## 2026-11-12 — Session 15: Phase 10 live smoke test (not completed: no keys visible)
+
+**Found.** The live keys were reported as injected, but the agent session had none of them: no `FIREBASE_PROJECT_ID`,
+`FIREBASE_WEB_API_KEY`, `RAZORPAY_*`, `GEMINI_API_KEY`, etc. in the environment and no `.env.local` file.
+**Ran.** `npm run dev` boots cleanly (Next.js 16.4.6, ready in 4.0s) and `GET /login` returns 200 — but without
+Firebase config, so `/login` shows its "not available" notice. This does NOT verify the live keys.
+**Open.** Provide the keys to the session (e.g. cloud environment variables, then a new session) and rerun.
+
 ## 2026-11-12 — Session 14: `/login` page, B-001 resolved
 
 **Built.** `src/app/login/page.tsx` (server component: reads the verified session, redirects signed-in people by

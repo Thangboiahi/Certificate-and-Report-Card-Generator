@@ -1,8 +1,13 @@
 # State
 
-**Updated:** 2026-11-12 (session 14, B-001 resolved) · **Branch:** `ccr-23292c99-dwsyq6`
+**Updated:** 2026-11-12 (session 15, Phase 10 smoke test started) · **Branch:** `ccr-23292c99-dwsyq6`
 
 ## Current phase
+
+**Current Phase: Phase 10 (Live Smoke Test).** Keys were reported as injected, but none were visible to the agent session
+(no `FIREBASE_*`, `RAZORPAY_*`, `GEMINI_*` variables, no `.env.local`); see the smoke-test result in `docs/DEVLOG.md`.
+
+Previous status:
 
 **Ready for Phase 10: Live API Key Injection & Production Deployment.** All 9 build phases are on disk and the
 pre-flight blocker B-001 (`/login` missing) is resolved: signed-out visitors now land on a working sign-in page and are
