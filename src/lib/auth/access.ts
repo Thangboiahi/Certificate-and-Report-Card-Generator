@@ -130,6 +130,8 @@ export const ROUTE_RULES: readonly RouteRule[] = [
     access: { kind: 'roles', roles: ['inst_admin', 'inst_staff'] },
   },
   { prefix: '/dashboard/vault', access: { kind: 'signed-in' } },
+  // Micro-Issuer tools: any signed-in person may issue under their own name.
+  { prefix: '/dashboard/issue', access: { kind: 'signed-in' } },
   { prefix: '/dashboard', access: { kind: 'signed-in' } },
   { prefix: '/editor', access: { kind: 'public' } },
 ];

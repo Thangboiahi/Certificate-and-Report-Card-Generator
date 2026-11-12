@@ -12,6 +12,7 @@
 import { spawn } from 'node:child_process';
 import { cpSync, existsSync } from 'node:fs';
 import { request as httpRequest } from 'node:http';
+import { createRequire } from 'node:module';
 import { createServer } from 'node:net';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -228,10 +229,12 @@ try {
     [null, '/admin', 307],
     [null, '/dashboard/vault', 307],
     [null, '/dashboard/institution', 307],
-    [null, '/editor', 404], // public: reaches the router (no page yet)
+    [null, '/dashboard/issue', 307],
+    [null, '/editor', 200], // public: the Tap-to-Place editor
     ['individual', '/admin', 403],
     ['individual', '/dashboard/institution', 403],
     ['individual', '/dashboard/vault', 200, 'individual'],
+    ['individual', '/dashboard/issue', 200, 'individual'],
     ['staff', '/dashboard/institution', 200, 'inst_staff'],
     ['staff', '/admin', 403],
     ['admin', '/dashboard/institution', 200, 'inst_admin'],
@@ -292,6 +295,58 @@ try {
       `${path} signed out → ${response.status}, no content`,
       `guarded role ${shown}`,
     );
+  }
+
+  console.log('\nWorkspace toggle (Chromium, signed in as an individual)');
+  {
+    const { chromium } = createRequire(import.meta.url)('playwright');
+    const browser = await chromium.launch();
+    try {
+      const context = await browser.newContext({
+        viewport: { width: 390, height: 844 },
+        isMobile: true,
+        hasTouch: true,
+      });
+      await context.addCookies([
+        { name: '__session', value: people.individual.cookie, url: server.origin },
+      ]);
+      const page = await context.newPage();
+      const errors = [];
+      page.on('pageerror', (error) => errors.push(error.message));
+      await page.goto(`${server.origin}/dashboard/vault`);
+      const vaultTab = page.getByTestId('workspace-vault');
+      const issueTab = page.getByTestId('workspace-issue');
+      check(
+        (await vaultTab.getAttribute('aria-selected')) === 'true' &&
+          (await page.getByRole('heading', { level: 1 }).innerText()) === 'My Digital Vault',
+        'the vault opens with "My Digital Vault" selected',
+      );
+      await issueTab.tap();
+      await page.waitForURL('**/dashboard/issue');
+      await page.getByRole('heading', { name: 'Issue Credentials' }).waitFor();
+      check(
+        (await issueTab.getAttribute('aria-selected')) === 'true' &&
+          (await page.getByTestId('guarded').getAttribute('data-role')) === 'individual',
+        'tapping "Issue Credentials" navigates to the guarded issuer workspace',
+      );
+      await page.waitForTimeout(600); // let the highlight settle
+      await page.screenshot({ path: join(root, 'tests', 'output', 'e2e-workspace-issue.png') });
+      await page.goBack();
+      await page.waitForURL('**/dashboard/vault');
+      await page.getByRole('heading', { name: 'My Digital Vault' }).waitFor();
+      check(
+        (await vaultTab.getAttribute('aria-selected')) === 'true',
+        'Back returns to the vault and the toggle follows the address',
+      );
+      await page.getByTestId('workspace-issue').focus();
+      await page.keyboard.press('Enter');
+      await page.waitForURL('**/dashboard/issue');
+      check(true, 'the toggle works from the keyboard');
+      check(errors.length === 0, 'no script errors', errors.join(' | '));
+      await context.close();
+    } finally {
+      await browser.close();
+    }
   }
 
   console.log('\nRSC (client navigation) requests');

@@ -139,6 +139,8 @@ describe('ruleForPath', () => {
     ['/dashboard/institution/staff', 'roles:inst_admin,inst_staff'],
     ['/dashboard/vault', 'signed-in'],
     ['/dashboard/vault/item-1', 'signed-in'],
+    ['/dashboard/issue', 'signed-in'],
+    ['/dashboard/issue/templates', 'signed-in'],
     ['/dashboard', 'signed-in'],
     ['/dashboard/settings', 'signed-in'],
     ['/editor', 'public'],
