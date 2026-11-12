@@ -22,15 +22,18 @@
   "dependencies": {
     "@pdf-lib/fontkit": "1.1.1",
     "@radix-ui/react-dialog": "1.3.1",
+    "@radix-ui/react-tabs": "1.2.1",
     "browser-image-compression": "2.0.2",
     "clsx": "2.1.1",
     "comlink": "4.4.2",
     "firebase-admin": "14.5.0",
+    "framer-motion": "14.6.0",
     "jszip": "3.10.2",
     "lucide-react": "1.72.0",
     "next": "16.4.6",
     "papaparse": "5.7.1",
     "pdf-lib": "1.17.1",
+    "pdfjs-dist": "6.4.299",
     "qrcode-generator": "2.0.4",
     "react": "19.3.0",
     "react-dom": "19.3.0",
@@ -39,7 +42,8 @@
     "regenerator-runtime": "0.14.1",
     "server-only": "0.0.1",
     "tailwind-merge": "3.7.0",
-    "zod": "4.6.7"
+    "zod": "4.6.7",
+    "zustand": "5.0.16"
   },
   "devDependencies": {
     "@expo-google-fonts/noto-sans-bengali": "^0.4.4",
