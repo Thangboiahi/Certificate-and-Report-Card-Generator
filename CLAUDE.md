@@ -54,6 +54,7 @@ them.
 | `node scripts/e2e-uploads.mjs`    | Upload gateway in Chromium (phone and desktop)                          |
 | `node scripts/e2e-editor.mjs`     | Tap-to-Place editor in Chromium, down to the worker's PDF positions     |
 | `scripts/e2e-dispatch.mjs`        | Dispatch routes + Kanban against emulators and mock providers (header)  |
+| `scripts/e2e-checkout.mjs`        | Checkout, signed webhooks, refunds, claim page against a mock Razorpay  |
 
 ## Rules of the codebase
 
@@ -81,6 +82,9 @@ them.
   `firebase/firestore.rules`: change both together, and extend the rules tests with every rules
   change (`npm run test:emulator`).
 - Never set Firebase emulator variables on a deployed server (ADR-019).
+- **Paid claims are minted only from what Razorpay vouches for**: a webhook whose signature over
+  the raw body was verified, or our own API call. Never from the browser's Checkout callback. Prices
+  are computed on the server; the issuer's share goes out as a held Route transfer (ADR-028).
 - Anything that spends credits deducts them in a Firestore transaction **before** calling an
   outside service, records it in a server-only ledger keyed by an idempotency key, and refunds
   failures (ADR-024). Outgoing messages never contain URLs taken from the request.
