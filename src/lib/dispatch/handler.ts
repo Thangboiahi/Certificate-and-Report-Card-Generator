@@ -11,11 +11,8 @@ import 'server-only';
 
 import { Resend } from 'resend';
 
-import { authorize } from '@/lib/auth/session';
 import { FirebaseConfigError, adminFirestore } from '@/lib/server/firebase-admin';
-import { isSameOrigin } from '@/lib/server/same-origin';
-import type { RouteAccess } from '@/lib/auth/access';
-import type { SessionUser } from '@/types/roles';
+import { error, gate, json, log } from '@/lib/server/json-route';
 
 import { emailConfigFromEnv, sendEmails } from './email';
 import {
@@ -33,8 +30,6 @@ import {
 } from './run';
 import { sendWhatsApp, whatsAppConfigFromEnv } from './whatsapp';
 
-const MAX_BODY_BYTES = 512 * 1024;
-
 const STATUS: Record<DispatchErrorCode, number> = {
   NOT_INSTITUTION_MEMBER: 403,
   INSTITUTION_NOT_FOUND: 403,
@@ -47,14 +42,6 @@ const STATUS: Record<DispatchErrorCode, number> = {
   REISSUE_BLOCKED: 409,
   NOTHING_TO_REISSUE: 409,
 };
-
-function json(status: number, body: unknown): Response {
-  return Response.json(body, { status, headers: { 'Cache-Control': 'no-store' } });
-}
-
-function error(status: number, code: string, message: string, details?: object): Response {
-  return json(status, { error: { code, message, ...(details ? { details } : {}) } });
-}
 
 /** `APP_ORIGIN` — claim links are built from it, never from request headers. */
 function appOrigin(): string | null {
@@ -83,49 +70,6 @@ function senderFor(channel: DispatchChannel): DispatchSender<DispatchChannel> | 
       client,
       dispatchId,
     );
-}
-
-const log = (severity: string, message: string, fields: object) =>
-  console[severity === 'ERROR' ? 'error' : 'info'](
-    JSON.stringify({ severity, message, ...fields }),
-  );
-
-type Gate = { ok: true; user: SessionUser; body: unknown } | { ok: false; response: Response };
-
-/** Same-origin, JSON, signed in with the required access, body within limits and parseable. */
-async function gate(request: Request, access: RouteAccess, forbidden: string): Promise<Gate> {
-  if (!isSameOrigin(request)) {
-    return { ok: false, response: error(403, 'CROSS_ORIGIN', 'Request refused.') };
-  }
-  if (!request.headers.get('content-type')?.toLowerCase().startsWith('application/json')) {
-    return { ok: false, response: error(415, 'UNSUPPORTED_MEDIA_TYPE', 'Send JSON.') };
-  }
-  let user: SessionUser;
-  try {
-    const result = await authorize(access);
-    if (result.decision === 'unauthenticated') {
-      return { ok: false, response: error(401, 'UNAUTHENTICATED', 'Sign in first.') };
-    }
-    if (result.decision === 'forbidden' || !result.user) {
-      return { ok: false, response: error(403, 'FORBIDDEN', forbidden) };
-    }
-    user = result.user;
-  } catch (cause) {
-    log('ERROR', 'dispatch auth unavailable', { cause: String(cause) });
-    return {
-      ok: false,
-      response: error(503, 'AUTH_UNAVAILABLE', 'Sign-in could not be checked. Try again shortly.'),
-    };
-  }
-  const text = await request.text().catch(() => '');
-  if (text.length > MAX_BODY_BYTES) {
-    return { ok: false, response: error(413, 'TOO_LARGE', 'The request is too large.') };
-  }
-  try {
-    return { ok: true, user, body: JSON.parse(text) };
-  } catch {
-    return { ok: false, response: error(400, 'INVALID_JSON', 'The body is not valid JSON.') };
-  }
 }
 
 function failure(cause: unknown, operation: string): Response {

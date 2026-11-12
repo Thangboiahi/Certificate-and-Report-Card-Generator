@@ -15,12 +15,19 @@
  */
 import { z } from 'zod';
 
+import { normalizePhone } from '@/lib/claim/contact';
 import { MAX_CLAIM_TTL_DAYS } from '@/types/audit';
+
+export { normalizePhone };
 
 export type DispatchChannel = 'whatsapp' | 'email';
 
 /** Credits charged per recipient. One message = one credit until pricing is decided (PLAN E12). */
 export const DISPATCH_CREDIT_COST: Record<DispatchChannel, number> = { whatsapp: 1, email: 1 };
+
+/** Claim fee limits in paise: Razorpay's minimum (₹1) to ₹10,000. */
+export const MIN_CLAIM_FEE_PAISE = 100;
+export const MAX_CLAIM_FEE_PAISE = 1_000_000;
 
 /** Largest number of recipients in one request (kept within one HTTP request's time budget). */
 export const MAX_DISPATCH_TARGETS = 500;
@@ -34,24 +41,6 @@ const recipientName = z
 const isoDate = z
   .string()
   .refine((value) => !Number.isNaN(Date.parse(value)), 'must be an ISO 8601 date-time');
-
-/**
- * Normalises an Indian or international mobile number to the digits WhatsApp expects (country
- * code, no `+`). A 10-digit Indian mobile number (starting 6–9) gets `91`. Returns `null` when the
- * value cannot be a mobile number.
- */
-export function normalizePhone(value: string): string | null {
-  const trimmed = value.trim();
-  if (!/^\+?[\d\s().-]+$/.test(trimmed)) return null;
-  let digits = trimmed.replace(/\D/g, '');
-  if (!trimmed.startsWith('+')) {
-    if (/^0[6-9]\d{9}$/.test(digits)) digits = digits.slice(1);
-    if (/^[6-9]\d{9}$/.test(digits)) digits = `91${digits}`;
-  }
-  if (digits.startsWith('91') && !/^91[6-9]\d{9}$/.test(digits)) return null;
-  // Country code + subscriber number: 11–15 digits (a bare 10-digit number must be Indian).
-  return /^[1-9]\d{10,14}$/.test(digits) ? digits : null;
-}
 
 const phone = z.string().transform((value, context) => {
   const normalized = normalizePhone(value);
@@ -95,6 +84,8 @@ export interface DispatchRequest<C extends DispatchChannel = DispatchChannel> {
   templateId: string;
   /** ISO 8601; validated to be in the future and within `MAX_CLAIM_TTL_DAYS`. */
   tokenExpiry: string;
+  /** Fee the recipient pays to claim, in paise (0 = free; else ₹1–₹10,000). */
+  claimFeePaise: number;
   targets: DispatchRecipient<C>[];
 }
 
@@ -125,6 +116,13 @@ export function parseDispatchRequest<C extends DispatchChannel>(
         .regex(/^[A-Za-z0-9._:-]{8,128}$/, 'must be 8–128 letters, digits, . _ : or -'),
       templateId: z.string().regex(/^[A-Za-z0-9_-]{1,128}$/, 'is not a template id'),
       tokenExpiry: isoDate,
+      claimFeePaise: z
+        .number()
+        .int('must be whole paise')
+        .refine((n) => n === 0 || (n >= MIN_CLAIM_FEE_PAISE && n <= MAX_CLAIM_FEE_PAISE), {
+          message: `must be 0 or between ${MIN_CLAIM_FEE_PAISE} and ${MAX_CLAIM_FEE_PAISE} paise`,
+        })
+        .optional(),
       targets: z
         .array(schemas[channel])
         .min(1, 'must list at least one recipient')
@@ -158,6 +156,7 @@ export function parseDispatchRequest<C extends DispatchChannel>(
       idempotencyKey: parsed.data.idempotencyKey,
       templateId: parsed.data.templateId,
       tokenExpiry: new Date(expiry).toISOString(),
+      claimFeePaise: parsed.data.claimFeePaise ?? 0,
       targets,
     },
   };

@@ -93,6 +93,8 @@ describe('toSessionUser', () => {
       email: null,
       role: 'guest',
       institutionId: null,
+      phoneNumber: null,
+      emailVerified: false,
     });
   });
 
@@ -108,7 +110,21 @@ describe('toSessionUser', () => {
       email: 'b@example.in',
       role: 'individual',
       institutionId: null,
+      phoneNumber: null,
+      emailVerified: false,
     });
+  });
+
+  it('carries the verified phone number and email status (used to match claim links)', () => {
+    expect(
+      toSessionUser({
+        uid: 'p',
+        phone_number: '+919876543210',
+        email: 'p@example.in',
+        email_verified: true,
+        firebase: { sign_in_provider: 'phone' },
+      }),
+    ).toMatchObject({ phoneNumber: '+919876543210', emailVerified: true, role: 'individual' });
   });
 
   it('applies elevated claims', () => {

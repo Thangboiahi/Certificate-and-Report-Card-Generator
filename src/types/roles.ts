@@ -51,6 +51,10 @@ export interface SessionUser {
   role: UserRole;
   /** Set exactly when `role` is `inst_admin` or `inst_staff`. */
   institutionId: string | null;
+  /** E.164 (`+919876543210`) when the account signed in with a phone number. */
+  phoneNumber?: string | null;
+  /** True when Firebase has verified `email` (always true after an email-link sign-in). */
+  emailVerified?: boolean;
 }
 
 /**
@@ -74,6 +78,8 @@ export const COLLECTIONS = {
   issuedBatches: 'issued_batches',
   /** One per claim link, keyed by the token's SHA-256. Holds the recipient until purged. Server-only. */
   claimTokens: 'claim_tokens',
+  /** Razorpay orders for claim fees (Phase 7). Server-only. */
+  claimOrders: 'claim_orders',
 } as const;
 
 // ───────────────────────────────────────────────────────────────────────────────────────────────
@@ -125,6 +131,19 @@ export interface VaultItemSchema {
   status: VaultItemStatus;
   /** `null` until revoked; then the server's time of revocation. */
   revokedAt: TimestampLike | null;
+
+  // Set when the credential was claimed through a claim link (Phase 7, ADR-027). Optional: items
+  // created directly by an issuer may lack them.
+  /** What the credential is, e.g. the template's name. */
+  credentialName?: string;
+  /** The issuing institution's (or Micro-Issuer's) display name at claim time. */
+  issuerName?: string;
+  /** The recipient's name as the issuer wrote it. */
+  recipientName?: string;
+  /** The issued batch the claim link came from. */
+  batchId?: string;
+  /** Unguessable id of the public verification page (`/v/{shareId}`), or `null` when not shared. */
+  shareId?: string | null;
 }
 
 export type VaultItemDocument = Omit<VaultItemSchema, 'id'>;

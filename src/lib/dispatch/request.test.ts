@@ -52,6 +52,7 @@ describe('parseDispatchRequest', () => {
         idempotencyKey: 'batch-0001',
         templateId: 'tpl-cert',
         tokenExpiry: '2026-12-31T18:29:59.000Z',
+        claimFeePaise: 0,
         targets: [{ recipientName: 'Aarav Sharma', phone: '919876543210' }],
       },
     });

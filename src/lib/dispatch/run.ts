@@ -262,6 +262,8 @@ export async function runDispatch<C extends DispatchChannel>(input: {
       lastReissuedAt: null,
       lastReissue: null,
       purgedAt: null,
+      claimFeePaise: request.claimFeePaise,
+      claimedCount: 0,
     });
     return { replay: null, issuerName: institution.name };
   });
@@ -291,6 +293,7 @@ export async function runDispatch<C extends DispatchChannel>(input: {
               expiresAt: tokenExpiry,
               purgeAfter: purgeAfterFor(tokenExpiry),
               claimedAt: null,
+              feePaise: request.claimFeePaise,
             }),
       ),
     );

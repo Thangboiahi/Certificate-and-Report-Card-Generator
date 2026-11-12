@@ -63,6 +63,7 @@ function request(count: number, key = 'batch-0001', ttlDays = 7): DispatchReques
     idempotencyKey: key,
     templateId: 'tpl-cert',
     tokenExpiry: new Date(Date.now() + ttlDays * DAY).toISOString(),
+    claimFeePaise: 0,
     targets: Array.from({ length: count }, (_, i) => ({
       recipientName: `Student ${i}`,
       phone: `91987654320${i}`,

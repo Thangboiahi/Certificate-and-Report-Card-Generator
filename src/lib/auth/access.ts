@@ -87,14 +87,21 @@ export interface VerifiedClaims {
 /** Derives who the request comes from. Anonymous Firebase users are guests. */
 export function toSessionUser(claims: VerifiedClaims): SessionUser {
   const email = typeof claims.email === 'string' ? claims.email : null;
+  const identity = {
+    phoneNumber: typeof claims.phone_number === 'string' ? claims.phone_number : null,
+    emailVerified: claims.email_verified === true,
+  };
   if (claims.firebase?.sign_in_provider === 'anonymous') {
-    return { uid: claims.uid, email, role: 'guest', institutionId: null };
+    return { uid: claims.uid, email, role: 'guest', institutionId: null, ...identity };
   }
   const roleClaims = parseRoleClaims(claims);
-  if (!roleClaims) return { uid: claims.uid, email, role: 'individual', institutionId: null };
+  if (!roleClaims) {
+    return { uid: claims.uid, email, role: 'individual', institutionId: null, ...identity };
+  }
   return {
     uid: claims.uid,
     email,
+    ...identity,
     role: roleClaims.role,
     institutionId: roleClaims.role === 'super_admin' ? null : roleClaims.institutionId,
   };
