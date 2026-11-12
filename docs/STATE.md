@@ -1,39 +1,39 @@
 # State
 
-**Updated:** 2026-11-12 · **Branch:** `ccr-23292c99-dwsyq6`
+**Updated:** 2026-11-12 (session 10) · **Branch:** `ccr-23292c99-dwsyq6`
 
 ## Current phase
 
-Phase 7 — Passwordless Claiming & The Vault (in progress).
+Phase 8 — Escrow Payment Engine: **built and verified against a mock of Razorpay** (ADR-028).
+Phase 7 — Passwordless Claiming & The Vault: **still open** (items below).
 
 ## Active blockers
 
-- API rate-limit pause. Waiting to resume Phase 7 execution.
+- No Razorpay account yet (E13): nothing has run against Razorpay's test mode.
 
 ## Next immediate task
 
-Finish the Firebase Auth flows (magic link / SMS OTP), the `app/claim/[token]` page and the
-`VaultDashboard` UI, then verify and record them.
-
-### Phase 7 work already on disk (typecheck and lint clean; NOT yet tested)
-
-- `src/lib/firebase.ts`: client Auth (email link, phone OTP, session exchange).
-- `src/lib/server/firebase-client-config.ts`: request-time web config.
-- `src/lib/claim/`: `contact.ts`, `razorpay.ts`, `claim.ts`, `handler.ts`.
-- `src/lib/server/json-route.ts`: shared same-origin/JSON/auth gate.
-- `src/lib/vault/vault.ts`: list, share on/off, public lookup.
-- API: `POST /api/claim`, `/api/claim/order`, `/api/vault/share`.
-- UI: `components/auth/PasswordlessSignIn.tsx`, `components/claim/ClaimFlow.tsx`,
-  `app/claim/[token]/page.tsx`.
-- Dispatch: optional `claimFeePaise`; `SessionUser` carries `phoneNumber`, `emailVerified`.
-
-### Phase 7 still to do
+Finish Phase 7, then wait for the Phase 9 brief:
 
 - `components/vault/VaultDashboard.tsx`, vault page wiring, public `/v/[shareId]` page, `/login`.
-- `ownerUid + issuedAt` composite index; rules entry and test for `claim_orders`.
-- Unit + emulator tests, `scripts/e2e-claim.mjs` (email link, OTP, fee via stubbed Razorpay).
-- ADR-027 and records.
+- `ownerUid + issuedAt` composite index (vault listing).
+- `scripts/e2e-claim.mjs`: email-link and phone-OTP sign-in in the browser (the Phase 8 e2e
+  creates verified accounts directly and does not exercise them).
+
+### Phase 8 on disk (verified: 544 unit, 70 emulator, 52/52 `scripts/e2e-checkout.mjs`)
+
+- `src/lib/razorpayClient.ts`, `src/lib/payments/{pricing,escrow,handler}.ts`, `src/types/payments.ts`.
+- `POST|GET /api/checkout`, `POST /api/webhooks/razorpay`, `POST /api/cron/reconcile-payments`.
+- Claim page cart + Checkout + polling; dispatch payout-account guard; rules and index.
+
+### When Razorpay keys arrive (E13)
+
+1. Set `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`; enable Route; create the webhook
+   (`/api/webhooks/razorpay`, event `payment.captured`) and set `RAZORPAY_WEBHOOK_SECRET`.
+2. Create a test Linked Account, set it as an institution's `razorpayAccountId`.
+3. Pay a test claim; confirm the transfer is on hold, then a duplicate payment refunds and reverses.
 
 ## Needed from the executive
 
-E13 Razorpay keys · E17 Meta WhatsApp · E18 Resend domain · Q4–Q7 (see `PLAN.md`).
+E13 Razorpay keys + Route · E19 Linked Account onboarding · E17 Meta WhatsApp · E18 Resend domain
+· Q4–Q9 (see `PLAN.md`; Q8 = platform fee / AI add-on price / escrow hold).

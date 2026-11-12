@@ -3,7 +3,7 @@
 The single place to see what we are building, where we are, what comes next, and what is waiting
 on a decision. Updated at the end of every working session.
 
-**Last updated:** 2026-11-12 (session 9 — documentation restructure; Phase 7 in progress)
+**Last updated:** 2026-11-12 (session 10 — Phase 8 escrow payment engine; Phase 7 still open)
 
 Related records: [ARCHITECTURE.md](./ARCHITECTURE.md) (how it works) ·
 [DECISIONS.md](./DECISIONS.md) (why) · [DEVLOG.md](./DEVLOG.md) (history)
@@ -66,17 +66,35 @@ Status key: ✅ done and verified · 🟡 in progress · ⬜ not started
 | 5     | CRM & Kanban Dashboards, dispatch        | ✅ (live provider accounts open)     |
 | 6     | Audit Logs & Time-Locked Claims          | ✅ (scheduler job open)              |
 | 7     | Passwordless Claiming & The Vault        | 🟡                                   |
-| 8     | To be briefed                            | ⬜                                   |
+| 8     | Escrow Payment Engine (Razorpay Route)   | ✅ (mock-verified; test keys E13)    |
 | 9     | AI Enrichment                            | ⬜ (scope to be briefed)             |
 
-### Phase 7 — Passwordless Claiming & The Vault (current)
+### Phase 8 — Escrow Payment Engine (Razorpay Route)
 
-| Item                                                                                                              | Status |
-| ----------------------------------------------------------------------------------------------------------------- | ------ |
-| `lib/firebase.ts`: `sendSignInLinkToEmail` magic link and phone OTP sign-in                                       | 🟡     |
-| `app/claim/[token]/page.tsx`: sign in with the contact the link was sent to; fee → Razorpay; free → instant claim | 🟡     |
-| `components/vault/VaultDashboard.tsx`: grid of owned vault items, "Generate Public Link"                          | ⬜     |
-| Tests and end-to-end verification                                                                                 | ⬜     |
+Pay-to-claim checkout with revenue splitting. Decision in ADR-028.
+
+| Item                                                                                                                   | Status           |
+| ---------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| `src/lib/razorpayClient.ts`: typed Razorpay client (orders with Route transfers, payments, refunds, webhook signature) | ✅               |
+| Dynamic cart priced on the server: Base Fee (issuer's claim fee) + optional AI add-on (off until Phase 9)              | ✅               |
+| `POST /api/checkout`: order whose transfer sends Base Fee − platform fee to the institution's Linked Account, on hold  | ✅               |
+| `POST /api/webhooks/razorpay`: exact signature check; `payment.captured` mints the vault item, consumes the token      | ✅               |
+| Refunds with transfer reversal for captures that cannot be honoured; pull reconciliation; sweep cron route             | ✅               |
+| Claim page: cart, Razorpay Checkout, confirmation from the server                                                      | ✅ (stubbed)     |
+| Dispatch refuses a claim fee for an institution without a payout account                                               | ✅               |
+| Against Razorpay test mode (real Checkout, Route, webhook delivery, `reverse_all` timing)                              | ⬜ needs E13/E19 |
+| Admin UI to set `razorpayAccountId`; operator view of refunds that keep failing                                        | ⬜ not briefed   |
+| Micro-Issuer payouts (they cannot dispatch yet, Q6)                                                                    | ⬜ Q9            |
+| Cloud Scheduler job for `/api/cron/reconcile-payments` (every 15 minutes)                                              | ⬜ when live     |
+
+### Phase 7 — Passwordless Claiming & The Vault (still open)
+
+| Item                                                                                                                | Status |
+| ------------------------------------------------------------------------------------------------------------------- | ------ |
+| `lib/firebase.ts`: `sendSignInLinkToEmail` magic link and phone OTP sign-in                                         | 🟡     |
+| `app/claim/[token]/page.tsx`: sign in with the contact the link was sent to; fee → checkout (Phase 8); free → claim | 🟡     |
+| `components/vault/VaultDashboard.tsx`: grid of owned vault items, "Generate Public Link"                            | ⬜     |
+| Tests and end-to-end verification                                                                                   | ⬜     |
 
 ### Phase 1 — Foundation & RBAC (two items open)
 
@@ -182,21 +200,22 @@ Available to every phase; verified in sessions 1–2:
 
 ### Still open
 
-| #   | Item                                                                                                        | Needed when                    |
-| --- | ----------------------------------------------------------------------------------------------------------- | ------------------------------ |
-| P   | Briefs for Phases 8–9                                                                                       | Before each phase              |
-| E17 | Meta WhatsApp Business: verified business, sender number, approved Utility template (4 parameters, ADR-024) | Before real WhatsApp dispatch  |
-| E18 | Resend account with a verified sending domain and the sender address                                        | Before real email dispatch     |
-| E3  | Region — recommended **asia-south1 (Mumbai)**; Firestore's region is permanent                              | When a live project is created |
-| E4  | Deployment access (you run commands, or a deploy service account / GitHub Actions)                          | When going live                |
-| E5  | Product name and domain                                                                                     | OAuth consent screen, launch   |
-| E6  | Super Admin email(s) for the live project (an emulator account is used until then)                          | When going live                |
-| E9  | How customers store photos today (sheet links, Google Form uploads, a folder)                               | Data-intake phase              |
-| E12 | Pricing: tiers and what each includes                                                                       | Billing phase                  |
-| E13 | Razorpay account (KYC complete), test keys first                                                            | Billing phase                  |
-| E14 | Business details for GST invoices                                                                           | Billing phase                  |
-| E15 | Privacy policy and terms, incl. children's data (DPDP Act)                                                  | Before launch                  |
-| E16 | Support email and logo                                                                                      | Before launch                  |
+| #   | Item                                                                                                         | Needed when                     |
+| --- | ------------------------------------------------------------------------------------------------------------ | ------------------------------- |
+| P   | Brief for Phase 9                                                                                            | Before the phase                |
+| E17 | Meta WhatsApp Business: verified business, sender number, approved Utility template (4 parameters, ADR-024)  | Before real WhatsApp dispatch   |
+| E18 | Resend account with a verified sending domain and the sender address                                         | Before real email dispatch      |
+| E3  | Region — recommended **asia-south1 (Mumbai)**; Firestore's region is permanent                               | When a live project is created  |
+| E4  | Deployment access (you run commands, or a deploy service account / GitHub Actions)                           | When going live                 |
+| E5  | Product name and domain                                                                                      | OAuth consent screen, launch    |
+| E6  | Super Admin email(s) for the live project (an emulator account is used until then)                           | When going live                 |
+| E9  | How customers store photos today (sheet links, Google Form uploads, a folder)                                | Data-intake phase               |
+| E12 | Pricing: tiers and what each includes                                                                        | Billing phase                   |
+| E13 | Razorpay account (KYC complete): test keys first, **Route enabled**, a webhook secret for `payment.captured` | Before real paid claims         |
+| E19 | Each institution that charges claim fees onboarded as a Razorpay Route Linked Account (`acc_…`, their KYC)   | Before that institution charges |
+| E14 | Business details for GST invoices                                                                            | Billing phase                   |
+| E15 | Privacy policy and terms, incl. children's data (DPDP Act)                                                   | Before launch                   |
+| E16 | Support email and logo                                                                                       | Before launch                   |
 
 ## 5. Suggested improvements (backlog)
 
@@ -247,24 +266,27 @@ phase.
 
 ## 6. Risks and open questions
 
-| #   | Risk / question                                                                                  | Current position                                                                                                                                                                                                                                    |
-| --- | ------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| R1  | **Indian-script rendering quality.** pdf-lib's own text drawing is wrong for several cases.      | Addressed by our own text drawing (ADR-007). Needs validation on real customer text in every launch language (E8).                                                                                                                                  |
-| R2  | **Memory on low-end phones** for large batches or large photos.                                  | Engine streams files out one by one and can split merged output. B1 (photo shrinking) is the main remaining lever. Target set: mid-range Android, 2,500 rows (E11). Merged output must use `rowsPerFile` splitting at that size; to be load-tested. |
-| R3  | **Limits enforced in the browser can be bypassed.**                                              | Tie paid value to server-side features (proxy quotas, verification pages, export). Decide with pricing (E12).                                                                                                                                       |
-| R4  | **Google OAuth verification** is slow and has requirements (domain, privacy policy, demo video). | Least-privileged scope approved (ADR-015, `drive.file` + Picker): no security assessment; basic verification still needed before launch.                                                                                                            |
-| R5  | **Private photos in Google Drive** (Google Form uploads) are not reachable by the proxy.         | Plan: user picks them with Google Picker and the browser reads them with the user's own access. To be designed in the data-intake phase (E9).                                                                                                       |
-| R6  | **pdf-lib is unmaintained.**                                                                     | Pinned and isolated (ADR-006). A maintained, compatible fork exists.                                                                                                                                                                                |
-| R7  | **Children's personal data** (DPDP Act): consent, retention, breach duties.                      | Architecture stores no recipient data on our servers. Legal review still needed (E15).                                                                                                                                                              |
-| R8  | **Encrypted or unusual template PDFs** cannot be opened.                                         | Rejected with a clear message. Measure how often it happens.                                                                                                                                                                                        |
-| R9  | **Proxy cost and abuse.**                                                                        | Authenticated only; limits on size and time. Rate limiting and quotas come with tiers (B23).                                                                                                                                                        |
-| Q3  | Should issuing a credential always spend institution credits?                                    | If yes, issuance must move to a server route that debits credits in a transaction, and browser writes to `vault_items` be closed (ADR-018). Needed before the billing phase.                                                                        |
-| Q4  | Should institution staff and admins also issue credentials personally (Micro-Issuer workspace)?  | Today every signed-in person sees both workspaces (ADR-023). Decide with the institution phase.                                                                                                                                                     |
-| Q5  | Price of a dispatched message (credits per WhatsApp / email)? Placeholder: 1 credit each.        | Decide with pricing (E12). WhatsApp Utility messages cost the business money per message in India.                                                                                                                                                  |
-| Q6  | Should Micro-Issuers (no institution, no credits) be able to dispatch?                           | Today only institution admins and staff can (ADR-024).                                                                                                                                                                                              |
-| Q7  | Retention: claim links last ≤ 90 days; recipient data is purged 30 days after expiry. Confirm.   | Chosen for DPDP minimisation (ADR-026); also needs the privacy policy (E15).                                                                                                                                                                        |
-| Q1  | Should free-tier documents carry a watermark?                                                    | Open — pricing decision (E12).                                                                                                                                                                                                                      |
-| Q2  | Is a desktop-first power-user mode needed alongside mobile-first?                                | Open — depends on who the first customers are.                                                                                                                                                                                                      |
+| #   | Risk / question                                                                                                                                           | Current position                                                                                                                                                                                                                                    |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| R1  | **Indian-script rendering quality.** pdf-lib's own text drawing is wrong for several cases.                                                               | Addressed by our own text drawing (ADR-007). Needs validation on real customer text in every launch language (E8).                                                                                                                                  |
+| R2  | **Memory on low-end phones** for large batches or large photos.                                                                                           | Engine streams files out one by one and can split merged output. B1 (photo shrinking) is the main remaining lever. Target set: mid-range Android, 2,500 rows (E11). Merged output must use `rowsPerFile` splitting at that size; to be load-tested. |
+| R3  | **Limits enforced in the browser can be bypassed.**                                                                                                       | Tie paid value to server-side features (proxy quotas, verification pages, export). Decide with pricing (E12).                                                                                                                                       |
+| R4  | **Google OAuth verification** is slow and has requirements (domain, privacy policy, demo video).                                                          | Least-privileged scope approved (ADR-015, `drive.file` + Picker): no security assessment; basic verification still needed before launch.                                                                                                            |
+| R5  | **Private photos in Google Drive** (Google Form uploads) are not reachable by the proxy.                                                                  | Plan: user picks them with Google Picker and the browser reads them with the user's own access. To be designed in the data-intake phase (E9).                                                                                                       |
+| R6  | **pdf-lib is unmaintained.**                                                                                                                              | Pinned and isolated (ADR-006). A maintained, compatible fork exists.                                                                                                                                                                                |
+| R7  | **Children's personal data** (DPDP Act): consent, retention, breach duties.                                                                               | Architecture stores no recipient data on our servers. Legal review still needed (E15).                                                                                                                                                              |
+| R8  | **Encrypted or unusual template PDFs** cannot be opened.                                                                                                  | Rejected with a clear message. Measure how often it happens.                                                                                                                                                                                        |
+| R9  | **Proxy cost and abuse.**                                                                                                                                 | Authenticated only; limits on size and time. Rate limiting and quotas come with tiers (B23).                                                                                                                                                        |
+| Q3  | Should issuing a credential always spend institution credits?                                                                                             | If yes, issuance must move to a server route that debits credits in a transaction, and browser writes to `vault_items` be closed (ADR-018). Needed before the billing phase.                                                                        |
+| Q4  | Should institution staff and admins also issue credentials personally (Micro-Issuer workspace)?                                                           | Today every signed-in person sees both workspaces (ADR-023). Decide with the institution phase.                                                                                                                                                     |
+| Q5  | Price of a dispatched message (credits per WhatsApp / email)? Placeholder: 1 credit each.                                                                 | Decide with pricing (E12). WhatsApp Utility messages cost the business money per message in India.                                                                                                                                                  |
+| Q6  | Should Micro-Issuers (no institution, no credits) be able to dispatch?                                                                                    | Today only institution admins and staff can (ADR-024).                                                                                                                                                                                              |
+| Q7  | Retention: claim links last ≤ 90 days; recipient data is purged 30 days after expiry. Confirm.                                                            | Chosen for DPDP minimisation (ADR-026); also needs the privacy policy (E15).                                                                                                                                                                        |
+| Q8  | Claim-fee economics: platform fee (placeholder 10 % of the claim fee), AI add-on price (placeholder ₹49, switched off), escrow hold (placeholder 7 days). | Configurable without code (`PLATFORM_FEE_BPS`, `AI_ENRICHMENT_FEE_PAISE`, `ESCROW_HOLD_DAYS`, ADR-028). The platform fee must cover Razorpay's ≈2 % + GST, which is charged on the whole payment. Decide with pricing (E12).                        |
+| Q9  | How do Micro-Issuers receive claim fees?                                                                                                                  | Route needs a KYC'd Linked Account per payee. Depends on Q6 (Micro-Issuer dispatch). Until then only institutions can charge.                                                                                                                       |
+| R10 | Refund after a mistaken capture relies on reversing the issuer's held transfer.                                                                           | Escrow hold makes reversal possible before settlement; to be confirmed in Razorpay test mode, especially right after capture (E13).                                                                                                                 |
+| Q1  | Should free-tier documents carry a watermark?                                                                                                             | Open — pricing decision (E12).                                                                                                                                                                                                                      |
+| Q2  | Is a desktop-first power-user mode needed alongside mobile-first?                                                                                         | Open — depends on who the first customers are.                                                                                                                                                                                                      |
 
 ## 7. How we work
 

@@ -1,6 +1,6 @@
 # Architecture
 
-How the system works **today** (end of session 8, Phase 6). Reasons for the choices are in
+How the system works **today** (end of session 10: Phase 8 built, Phase 7 partly). Reasons for the choices are in
 [DECISIONS.md](./DECISIONS.md); status and roadmap are in [PLAN.md](./PLAN.md).
 
 ## Overview
@@ -20,8 +20,9 @@ How the system works **today** (end of session 8, Phase 6). Reasons for the choi
 ```
 
 Documents are generated in the browser. The server only authenticates, serves the app and relays
-images that browsers cannot fetch themselves (CORS). Firebase Auth and Firestore rules run against
-the local emulators; live Firebase, Storage, Sheets, Drive and Razorpay are **not wired yet**.
+images that browsers cannot fetch themselves (CORS), and takes claim-fee payments (Razorpay).
+Firebase Auth and Firestore rules run against the local emulators and Razorpay against a local mock;
+live Firebase, Storage, Sheets, Drive and Razorpay accounts are **not connected yet**.
 
 ## Code map
 
@@ -46,6 +47,10 @@ the local emulators; live Firebase, Storage, Sheets, Drive and Razorpay are **no
 | `src/app/dashboard/(workspace)/`             | Vault and issuer pages sharing the toggle layout                                              |
 | `src/lib/dispatch/`, `src/app/api/dispatch/` | WhatsApp / email claim-link dispatch with the credit ledger (Phase 5)                         |
 | `src/lib/crm/`, `src/types/crm.ts`           | Credential-request stages and Kanban board state                                              |
+| `src/lib/claim/`, `src/app/claim/`           | Claim links: contact matching, free claims, minting into the vault, the claim page (Phase 7)  |
+| `src/lib/razorpayClient.ts`                  | Typed Razorpay REST client and webhook signature check (Phase 8)                              |
+| `src/lib/payments/`, `src/types/payments.ts` | Cart pricing and split, escrow engine, checkout / webhook / sweep handlers (Phase 8)          |
+| `src/app/api/checkout/`, `api/webhooks/`     | Thin routes over `src/lib/payments/handler.ts`                                                |
 | `src/app/playground/`                        | Developer harness that runs the whole stack on a sample job                                   |
 | `tests/`, `scripts/`, `public/samples/`      | Test support and fixtures, e2e script and asset generators, sample template and photos        |
 
@@ -220,6 +225,40 @@ Firestore rules. ADR-024.
   tokens past `purgeAfter`, marks batches with no tokens left as purged.
 - Both collections are server-only; indexes in `firebase/firestore.indexes.json`. ADR-026.
 
+## Pay-to-claim escrow (Phase 8)
+
+```
+Recipient (signed in with the contact the link was sent to)
+  │ POST /api/checkout { token, addOns? }
+  ▼
+server: cart = Base Fee (token.feePaise) [+ AI add-on]  ── split: issuer = Base − platform fee
+  │ Razorpay POST /orders { amount, transfers: [{ account: institution.razorpayAccountId,
+  │                                               amount: issuer share, on_hold, on_hold_until }] }
+  ▼
+claim_orders/{orderId} = created ──► browser opens Razorpay Checkout, then polls GET /api/checkout
+                                                                              │
+Razorpay ── POST /api/webhooks/razorpay (payment.captured, X-Razorpay-Signature)│
+  │ verify HMAC over raw bytes ✓                                               │ every ≥ 5 s:
+  ▼                                                                            ▼ GET /orders/{id}/payments
+settleCapturedPayment (one transaction) ◄──────────────────────────────────────┘ (also the 15-min sweep)
+  ├─ ours? amount & currency match? token present and unclaimed?
+  ├─ yes → vault_items/{tokenId} created, token claimed, batch claimedCount+1, order paid
+  └─ no  → order refund_due (+ reason) → refund with reverse_all (transfer taken back) → refunded
+```
+
+- On capture Razorpay creates the transfer; it stays on hold (`ESCROW_HOLD_DAYS`, default 7) in the
+  institution's Route balance before settling to its bank.
+- The browser's Checkout callback is not trusted for anything; it only starts the polling.
+- Pricing: `pricingFromEnv()` (`PLATFORM_FEE_BPS`, `AI_ENRICHMENT_FEE_PAISE`, `ESCROW_HOLD_DAYS`);
+  a malformed value disables payments (503) rather than charging something else.
+- Every step is idempotent (webhook replays, webhook vs poll vs sweep races). Refunds that fail
+  leave `refundPending: true` for the next poll or sweep.
+- `POST /api/cron/reconcile-payments` (Bearer `CRON_SECRET`): open orders 2 min – 3 days old and
+  every order with `refundPending`. Shared cron authorisation: `src/lib/server/cron-auth.ts`.
+- Dispatch refuses a claim fee when the institution has no `razorpayAccountId`.
+- `claim_orders` is server-only in the rules; the composite index (status, createdAt) is in
+  `firebase/firestore.indexes.json`. ADR-028.
+
 ## CRM board (Phase 5)
 
 `KanbanBoard` (`@hello-pangea/dnd`) shows credential requests in four stages; state logic in
@@ -250,12 +289,12 @@ Cloud Run notes for when it is deployed:
 
 ## Testing
 
-- `npm test` — 509 unit/integration tests (Node). Engine tests render PDFs with poppler
+- `npm test` — 544 unit/integration tests (Node). Engine tests render PDFs with poppler
   (`pdftoppm`/`pdftotext`) and assert on pixels and word positions; they skip without poppler.
 - `tests/showcase.test.ts` writes pictures to `tests/output/` for visual review.
 - `node scripts/e2e-playground.mjs` (after `npm run build`) — production server + Chromium.
-- `npm run test:emulator` — 50 tests against the Firebase Auth + Firestore emulators (claims,
-  sessions, proxy, rules).
+- `npm run test:emulator` — 70 tests against the Firebase Auth + Firestore emulators (claims,
+  sessions, proxy, rules, dispatch, the escrow engine).
 - `firebase emulators:exec --only auth,firestore --project demo-v6 'node scripts/e2e-auth.mjs'`
   (after `npm run build`) — 53 auth checks against the production server, including the
   workspace toggle in Chromium.
@@ -266,3 +305,7 @@ Cloud Run notes for when it is deployed:
 - `node scripts/e2e-editor.mjs` (after `npm run build`) — the editor on a touch phone and a
   desktop: rendering, alignment, D-pad, font size, drag, tap-to-place, swipe-to-close, and the
   worker's PDF read back with `pdftotext -bbox`.
+- `firebase emulators:exec --only auth,firestore --project demo-v6 'node scripts/e2e-checkout.mjs'`
+  (after `npm run build`) — 52 checks: checkout, signed / forged webhooks, minting, replays,
+  reconciliation, refunds with `reverse_all` against a recording mock of Razorpay's API, and the
+  claim page on a phone in Chromium with Razorpay Checkout stubbed.

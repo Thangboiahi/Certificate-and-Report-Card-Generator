@@ -4,6 +4,10 @@ Newest first. Per-change detail: git history and the repository-root `CHANGELOG.
 
 ## Completed
 
+- **Phase 8 — Escrow Payment Engine:** pay-to-claim checkout with a server-priced cart (claim fee
+  - optional AI add-on), Razorpay Route split (platform fee kept, institution share transferred and
+    held 7 days), webhook-only minting with exact signature checks, automatic refunds with transfer
+    reversal, pull reconciliation and a sweep route. Verified against a mock of Razorpay.
 - **Phase 6 — Audit Ledger & Time-Locked Claims:** `issued_batches` ledger, server-minted
   SHA-256-stored claim tokens with expiry and 30-day purge, `AuditLedger` table with free,
   bounded 1-Click Re-Issue, purge route for Cloud Scheduler.
@@ -19,4 +23,5 @@ Newest first. Per-change detail: git history and the repository-root `CHANGELOG.
 
 ## In progress
 
-- **Phase 7 — Passwordless Claiming & The Vault** (see `STATE.md`).
+- **Phase 7 — Passwordless Claiming & The Vault** (see `STATE.md`): sign-in, claim page and free
+  claims built; vault dashboard, share page and browser sign-in tests open.

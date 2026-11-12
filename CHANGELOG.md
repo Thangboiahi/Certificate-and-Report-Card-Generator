@@ -6,6 +6,9 @@ All notable changes. Newest first. Details and reasoning: `docs/DEVLOG.md`, `doc
 
 ### Changed
 
+- Paid claims go through `/api/checkout` and are minted only from a verified Razorpay webhook or the server's own Razorpay check; `/api/claim/order` (Phase 7 work in progress) is removed and `/api/claim` claims free credentials only.
+- Dispatch refuses a claim fee when the institution has no Razorpay Linked Account (`PAYOUT_ACCOUNT_MISSING`, nothing charged).
+- Institutions may carry `razorpayAccountId` (set by super admins).
 - Dispatch requests carry `templateId` and a batch `tokenExpiry`; claim tokens are minted by the server (no per-recipient `claimToken`/`expiresAt`).
 - Roadmap replaced by the 9-phase B2B2C plan; ADR-015 accepted; local-emulator development until a live project exists.
 - `TemplateRecord.ownerId` is now `ownerUid`, with `institutionId` and server timestamps.
@@ -13,6 +16,8 @@ All notable changes. Newest first. Details and reasoning: `docs/DEVLOG.md`, `doc
 
 ### Added
 
+- Phase 8, escrow payment engine: `src/lib/razorpayClient.ts`; `POST /api/checkout` (cart: claim fee + optional AI add-on, Razorpay Route transfer to the institution held in escrow); `GET /api/checkout` (status with reconciliation); `POST /api/webhooks/razorpay` (`payment.captured` mints the vault item and consumes the claim token); automatic refunds with transfer reversal; `POST /api/cron/reconcile-payments`; cart and confirmation on the claim page; `claim_orders` ledger.
+- Phase 7 (in progress): passwordless sign-in (email link, phone OTP), `/claim/[token]`, free claims into the vault, vault sharing API.
 - Phase 6: `AuditLedger` with 1-Click Re-Issue (`POST /api/dispatch/reissue`, no credits); `issued_batches` ledger; server-minted, SHA-256-stored, time-locked claim tokens (`tokenManager.ts`) and `POST /api/cron/purge-claim-tokens`.
 - Phase 5: `KanbanBoard` for credential requests (`@hello-pangea/dnd`); `POST /api/dispatch/whatsapp` (Meta Cloud API) and `POST /api/dispatch/email` (Resend) with credits deducted before sending, refunds and an idempotent `dispatches` ledger.
 - Phase 4: Tap-to-Place editor at `/editor` (`MobileEditor` with pdf.js backgrounds, drag and tap-to-place; `PropertyBar` bottom sheet with D-pad and font size; Zustand `templateStore` in PDF points); `WorkspaceToggle` between "My Digital Vault" and "Issue Credentials"; guarded `/dashboard/issue`.

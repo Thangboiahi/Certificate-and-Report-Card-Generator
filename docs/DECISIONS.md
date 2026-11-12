@@ -40,6 +40,8 @@ when to revisit it. This is the file to open when someone asks "why is it built 
 | 024 | Dispatch: credits deducted in a transaction before sending; refunds; idempotent ledger | Accepted |
 | 025 | CRM Kanban with `@hello-pangea/dnd`; optimistic moves; not persisted yet               | Accepted |
 | 026 | Audit ledger, server-minted hashed claim tokens, bounded free re-issue, purge sweep    | Accepted |
+| 027 | Passwordless claiming bound to the contact the link was sent to; vault sharing links   | Accepted |
+| 028 | Escrow payment engine: server-priced cart, Route split on hold, webhook-only minting   | Accepted |
 
 ---
 
@@ -830,3 +832,118 @@ the newest message the only working one.
 built. Whether re-issues should be free without limit, or cost credits, is a pricing question
 (Q5). If the server stops mid re-issue, some recipients may hold renewed links that were never
 sent; a later re-issue covers them.
+
+---
+
+## ADR-027 — Passwordless claiming bound to the contact the link was sent to; vault sharing links
+
+**Date:** 2026-11-12 · **Status:** Accepted (written in session 10 for the Phase 7 code of session 9;
+the browser sign-in flows are not yet tested — see PLAN Phase 7. Payment part amended by ADR-028.)
+
+**Context.** Phase 7: recipients claim the credential behind a claim link (ADR-026) into their own
+vault without creating a password, and can share it.
+
+**Decision.**
+
+- **Sign-in is passwordless only:** Firebase email link or phone OTP (`src/lib/firebase.ts`). The
+  fresh ID token is exchanged once for the httpOnly session cookie (ADR-017) and the browser-side
+  Firebase session is dropped (in-memory persistence). The Firebase web configuration is read from
+  the server's environment at request time and passed as a prop, so one build serves every
+  environment and the emulator address only reaches a browser through a server that passed the
+  emulator guard (ADR-019). `firebase` moved from dev to runtime dependencies.
+- **A claim link only works for the person it was sent to.** The signed-in account must prove the
+  same contact: the same phone number (OTP-verified) for WhatsApp links, or the same email address
+  verified by Firebase for email links (`contactMatches`). A forwarded link is useless to anyone
+  else. The session therefore carries `phoneNumber` and `emailVerified`.
+- **The public claim page** shows who issued what and a masked contact (`+91 ••••••3210`,
+  `a•••@example.in`); the recipient's name only to the matching signed-in user. `referrer:
+no-referrer` and `noindex`, because the token is in the address.
+- **Claiming** is one transaction: token marked claimed (`claimedAt`, `claimedByUid`),
+  `vault_items/{tokenId}` created (so a second claim finds the same item), batch `claimedCount`
+  incremented. Claiming twice returns the same item.
+- **Sharing:** the owner turns on an unguessable `shareId` (256-bit) for a public verification page
+  `/v/{shareId}`; turning it off deletes the id, so old links die.
+- Dispatch may set an optional claim fee (`claimFeePaise`, ₹1–₹10,000) stored on each token.
+
+**Amended by ADR-028:** the session-9 code took the Razorpay Checkout callback's signature from the
+browser as proof of payment and minted from it. That path (`/api/claim/order`, `payment` in
+`/api/claim`) was replaced before release: paid claims are minted only from a captured payment that
+Razorpay itself vouches for.
+
+---
+
+## ADR-028 — Escrow payment engine: server-priced cart, Route split on hold, webhook-only minting
+
+**Date:** 2026-11-12 · **Status:** Accepted (prices and hold period are placeholders, PLAN E12/Q8;
+verified against a mock of Razorpay's API, not yet against Razorpay test mode, PLAN E13)
+
+**Context.** Phase 8 brief: a dynamic pay-as-you-go checkout (Base Fee + AI Fee) with Razorpay
+Route revenue splitting — the platform fee to the main account, the remainder to the institution's
+`razorpayAccountId` — and a `payment.captured` webhook that mints the `VaultItem` and consumes the
+claim token, with exact signature verification so nobody can mint by forging a payment.
+
+**Decision.**
+
+- **What is sold:** claiming one credential. The cart is priced on the server only:
+  **Base Fee** = the claim fee on the token (set by the issuer at dispatch), plus optional
+  **add-ons** — today `ai_enrichment` (the "AI Fee"), priced by `AI_ENRICHMENT_FEE_PAISE`. The add-on
+  is **off unless that variable is set**: Phase 9 has not defined what AI enrichment delivers, and
+  we should not sell it before it exists. A vault item records the add-ons it was bought with, for
+  Phase 9 to fulfil.
+- **Split (Razorpay Route, transfers created with the order):** issuer share = Base Fee − platform
+  fee; platform fee = `PLATFORM_FEE_BPS` of the Base Fee (default 10 %, rounded to the paisa,
+  capped at 50 %), lowered when needed so the transfer is never under Razorpay's ₹1 minimum.
+  Add-ons stay entirely with the platform. Razorpay's own fee is charged to the main account, so
+  the platform fee must cover it (≈2 % + GST).
+- **Escrow:** the transfer is created `on_hold` until `ESCROW_HOLD_DAYS` (default 7) after checkout.
+  Until then the money sits in the institution's Route balance but does not settle to its bank, so
+  a payment that cannot be honoured can be refunded with `reverse_all: true`, which takes the
+  transfer back.
+- **Payout account:** `InstitutionSchema.razorpayAccountId` (`acc_…`), set by a super admin after
+  Razorpay has onboarded the institution as a Linked Account (rules: super admins only, format
+  checked). No account → checkout refuses (`ISSUER_NOT_PAYABLE`) and **dispatch refuses a claim fee
+  before charging credits** (`PAYOUT_ACCOUNT_MISSING`), so recipients never receive a link they
+  cannot pay. Micro-Issuers cannot dispatch yet (ADR-024), so they have no payout path; the engine
+  takes the payee from the token's issuer and is ready for one.
+- **Minting only from what Razorpay vouches for.** The browser's Checkout callback proves nothing
+  and mints nothing; the page just polls `GET /api/checkout`. A paid claim is minted by:
+  1. the **webhook** `payment.captured`, after an exact check of `X-Razorpay-Signature`
+     (HMAC-SHA256 over the raw request bytes with `RAZORPAY_WEBHOOK_SECRET`, hex, constant-time;
+     size-limited; nothing read or written before it passes), or
+  2. **pull reconciliation**: our own authenticated `GET /orders/{id}/payments`, made by the status
+     poll (at most every 5 s per order) and by a sweep (`POST /api/cron/reconcile-payments`, Cloud
+     Scheduler every 15 minutes, `CRON_SECRET`) over open orders 2 minutes to 3 days old.
+     Both apply `settleCapturedPayment`: one transaction checks the order is ours and the amount and
+     currency match, then mints `vault_items/{tokenId}` (with `orderId`, `paymentId`, `addOns`), marks
+     the token claimed and the order `paid`. Idempotent under replays and races (tested: six
+     concurrent deliveries mint once).
+- **Captures that cannot be honoured are refunded, never kept:** credential already claimed (paid
+  twice, e.g. two tabs), claimed by someone else, link purged, amount mismatch, or a stray second
+  capture on a settled order. The order records `refund_due` with the reason in the same
+  transaction; the refund (`reverse_all`) is attempted at once and retried by the poll and the
+  sweep (`refundPending`). A refund Razorpay already made (our call timed out) is recognised from
+  the payment's `amount_refunded`.
+- **A capture after the link's expiry is honoured** if the order was opened while it was valid
+  (the recipient started paying in time).
+- **Webhook answers:** 401 bad signature, 413 oversized, 503 not configured; 200 for events we do
+  not act on and for signed but unusable payloads (Razorpay disables a webhook that fails for 24 h;
+  the sweep covers those); 500 only when the capture could not be recorded, so Razorpay retries.
+  Refunds inside the webhook are capped at 2 s per call (Razorpay waits 5 s).
+- **Records:** `claim_orders/{razorpayOrderId}` (server-only in the rules): payer, cart, split,
+  Linked Account, hold end, status `created → paid | refund_due → refunded`, payment and refund
+  ids. Razorpay receives ids and the credential's name only — no names, emails or phone numbers.
+- **No `razorpay` npm package.** `src/lib/razorpayClient.ts` is a ~250-line typed client over
+  `fetch` (orders with transfers, order payments, payment fetch, refund, webhook verification),
+  initialised once from the environment (`getRazorpayClient`). Reasons: its fetch is injectable, so
+  tests and the end-to-end run use a recording mock via `RAZORPAY_API_BASE_URL` (the SDK hard-codes
+  its host); the SDK's webhook check compares with `===`, not in constant time; it would add axios
+  to the server. Revisit if we need many more Razorpay APIs (subscriptions, payouts).
+- Replaces the Phase 7 WIP payment path (ADR-027): `/api/claim/order` removed; `/api/claim` is for
+  free credentials only (402 for paid ones).
+
+**Consequences / open.** Prices, the add-on and the hold period are placeholders (E12, Q8). Route
+must be enabled on the Razorpay account and each institution onboarded as a Linked Account with
+KYC (E13, E19). Not yet exercised against Razorpay's test mode, in particular whether `reverse_all`
+reverses a transfer created milliseconds earlier on capture. GST invoices for the platform fee and
+add-ons are not produced (E14). Refunds that keep failing stay `refundPending` and are logged as
+errors; there is no operator screen for them yet.

@@ -5,6 +5,71 @@ was verified, and what is left open. The line-by-line history is in git; this fi
 
 ---
 
+## 2026-11-12 — Session 10: Phase 8, escrow payment engine (Razorpay Route)
+
+**Built.**
+
+- `src/lib/razorpayClient.ts`: typed client over `fetch` — orders with Route `transfers`, an
+  order's payments, payment fetch, refund (`reverse_all`), exact webhook signature check
+  (HMAC-SHA256 over the raw bytes, constant-time); `getRazorpayClient()` initialised from the
+  environment. Replaces `src/lib/claim/razorpay.ts`.
+- `src/lib/payments/pricing.ts`: server-priced cart (Base Fee + optional AI add-on), platform/issuer
+  split never below Razorpay's ₹1 transfer minimum, pricing from the environment.
+- `src/lib/payments/escrow.ts`: `createClaimCheckout`, `settleCapturedPayment` (mint or refund due,
+  one transaction), `refundOutstanding`, `reconcileOrder`, `getCheckoutStatus`,
+  `reconcileOpenCheckouts`. `claim_orders/{orderId}` ledger.
+- Routes: `POST /api/checkout`, `GET /api/checkout?orderId=`, `POST /api/webhooks/razorpay`,
+  `POST /api/cron/reconcile-payments` (cron auth now shared in `src/lib/server/cron-auth.ts`).
+- Claim page: cart with the AI add-on, Razorpay Checkout, then polling until the server confirms.
+- `InstitutionSchema.razorpayAccountId` (rules: super admins only, `acc_…` format); `claim_orders`
+  closed in the rules; composite index; dispatch refuses a claim fee without a payout account.
+- Phase 7 WIP payment path removed (`/api/claim/order`, payment proof in `/api/claim`): it minted
+  from the browser's Checkout signature. `/api/claim` is now for free credentials only.
+- ADR-027 (Phase 7 decisions, written now), ADR-028. `.env.example`, `CLAUDE.md` updated.
+
+**Decided beyond the brief.** The AI add-on is off unless `AI_ENRICHMENT_FEE_PAISE` is set (Phase 9
+has not defined it; we should not sell it yet). Issuer share held 7 days (the "escrow"). Captures
+that cannot be honoured are refunded automatically. A capture after link expiry is honoured when
+checkout began in time. No `razorpay` npm package (reasons in ADR-028).
+
+**Found and fixed.** A refund for an amount-mismatch capture used the order's amount instead of
+the captured amount (Razorpay would refuse it); refunds now record and use the captured amount. The
+auth emulator test still expected the pre-Phase-7 session shape (no `phoneNumber` /
+`emailVerified`) and had been failing since session 9.
+
+**Verified.**
+
+- 544 unit tests (34 new): client request shapes, auth header, error mapping, id validation (no
+  malformed id reaches a URL), RFC 4231 HMAC vector, signature rejects one changed byte /
+  re-serialised JSON / wrong secret / bad lengths; pricing defaults, overrides, malformed env,
+  split invariants over 0–50 % fees and ₹1–₹10,000; the webhook touches no database before the
+  signature passes (unsigned, forged, tampered, invalid UTF-8, oversized, other events).
+- 70 emulator tests (20 new): checkout split and hold; eight refusals that open nothing at
+  Razorpay; mint once under six racing deliveries; replays; unknown orders and non-captured
+  payments ignored; refunds with `reverse_all` for duplicate purchase, purged link, amount
+  mismatch, stray capture; failed refund retried; refund already made recognised; status poll
+  throttled to 5 s and settles a lost webhook; sweep window (2 min – 3 days) and refund retries;
+  dispatch payout guard charges nothing; rules for `razorpayAccountId` and `claim_orders`.
+- `scripts/e2e-checkout.mjs`, 52/52 on the production build with a recording mock of Razorpay:
+  401/403/409/400 refusals; client-sent amount ignored; ₹149 order with a ₹90 transfer to the
+  Linked Account held 7 days, no personal data sent; five forged webhook variants rejected with
+  nothing minted; signed capture mints; replay idempotent; pull reconciliation; duplicate payment
+  refunded with `reverse_all`; sweep route auth; claim page on a Pixel 7 profile: cart ₹100 → ₹149
+  with the add-on, stubbed Checkout, "Added to your vault" after the signed webhook, no script
+  errors. Screenshots in `tests/output/e2e-checkout-*.png`.
+- e2e-dispatch and e2e-auth (53/53) still pass; `npm run verify` clean.
+
+**Not verified.** Nothing ran against Razorpay itself (no keys, E13): real Checkout, Route
+transfers, webhook delivery and whether `reverse_all` catches a transfer created at capture.
+Recipients in the tests were created with verified emails directly: the Phase 7 email-link and
+phone-OTP sign-in in the browser is still untested.
+
+**Open.** Phase 7 items (VaultDashboard, `/v/[shareId]`, `/login`, sign-in e2e); Razorpay test mode
+(E13) and Linked Account onboarding (E19); pricing Q8; Micro-Issuer payouts Q9; admin screen for
+`razorpayAccountId` and failing refunds; Cloud Scheduler job for the sweep; GST invoices (E14).
+
+---
+
 ## 2026-11-12 — Session 8: Phase 6, audit logs and time-locked claims
 
 **Built.**
