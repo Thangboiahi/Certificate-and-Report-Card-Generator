@@ -5,6 +5,25 @@ was verified, and what is left open. The line-by-line history is in git; this fi
 
 ---
 
+## 2026-11-12 — Session 17: Phase 10 smoke test, attempt 2 (Auth still offline in this session)
+
+**Ran.** `npm run dev` (Next 16.4.6, `Environments: .env.local`, ready in 0.4s), `GET /login` → 200, body says
+"Sign-in is not available yet — This server has no sign-in configuration". No session was established.
+**Why.** The `.env.local` in this container is the same file as in session 16 (modified 08:55 UTC; same variable names and
+lengths): still no `FIREBASE_WEB_API_KEY`, and `FIREBASE_PRIVATE_KEY` is still 40 characters. No `FIREBASE_*` variables exist
+in the process environment either. So the corrected/rotated values did not reach this container; `/login` reads
+`FIREBASE_WEB_API_KEY` at request time (`src/lib/server/firebase-client-config.ts`) and has nothing to read.
+**Git.** `.env.local` is untracked and ignored (`.env*` in `.gitignore`); only `.env.example` is tracked. Not in the tip of
+`origin/ccr-23292c99-dwsyq6` and `git log --all -- .env.local` is empty in this clone. Key revocation/rotation could not be
+checked from here (values never printed or used).
+**Not verified.** A real sign-in (email link / SMS), session cookie, role routing against live Firebase. Admin SDK
+credentials (`firebase-admin.ts` uses Application Default Credentials, so `FIREBASE_PRIVATE_KEY`/`FIREBASE_CLIENT_EMAIL`
+would not be read even if complete; set `GOOGLE_APPLICATION_CREDENTIALS` or run on Cloud Run).
+**Open.** Put the new values where this session can see them (cloud environment variables, then start a new session, or
+write the file in the container), then rerun.
+
+---
+
 ## 2026-11-12 — Session 16: Phase 10 smoke test with `.env.local`
 
 **Ran.** `npm run dev` with the keys from `.env.local` (names checked, values never printed). Server ready, log shows

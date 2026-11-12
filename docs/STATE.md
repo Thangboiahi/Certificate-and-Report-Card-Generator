@@ -4,6 +4,10 @@
 
 ## Current phase
 
+**Attempt 2 (session 17): Auth is NOT online in the agent session.** `/login` still shows "not available yet": this
+container's `.env.local` is unchanged (no `FIREBASE_WEB_API_KEY`, `FIREBASE_PRIVATE_KEY` still 40 chars). The rotated values
+have not reached it. Rerun once they do. See `docs/DEVLOG.md`.
+
 **Current Phase: Phase 10 (Live Smoke Test).** Server boots cleanly with `.env.local` (Next.js loads it), but `/login`
 shows "not available yet": the app reads `FIREBASE_WEB_API_KEY`, while `.env.local` only has `NEXT_PUBLIC_FIREBASE_API_KEY`.
 Also: `FIREBASE_PRIVATE_KEY`/`FIREBASE_CLIENT_EMAIL` are not read by the code (Admin SDK uses Application Default
