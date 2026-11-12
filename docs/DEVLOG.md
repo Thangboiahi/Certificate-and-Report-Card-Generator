@@ -32,6 +32,7 @@ item); `scripts/e2e-editor.mjs` and `scripts/e2e-ai.mjs` were edited to click "T
 **Learned.** `npx prettier --write src` on this Windows checkout rewrote line endings in every file (autocrlf); run Prettier
 only on the files you changed.
 **Open.** LOCAL_TODO items 3 and 4 (live Kanban, Vault indexes); sign-out e2e; template font choice for Indic scripts.
+**Follow-up (handoff check).** Reported: "gateway does not move to the canvas after an upload". Re-tested in the dev server: a PDF template opens the canvas with `MobileEditor` and `PropertyBar` (tapping a field opens the bar), with or without a CSV chosen first. The one case that stays on the gateway is a CSV alone, because the canvas needs a template; the gateway now says "Your data is ready. Choose a template below" and "Opening your template…" so it no longer looks stuck.
 
 ---
 

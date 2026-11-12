@@ -105,6 +105,20 @@ export function EditorGateway({ onLoaded, onSample }: EditorGatewayProps) {
         <h2 id="gateway-template" className="flex items-center gap-2 text-sm font-medium">
           <FileText className="size-4" aria-hidden /> 1. Template
         </h2>
+        {csv && !busy && (
+          <p
+            role="status"
+            data-testid="gateway-need-template"
+            className="text-sm text-blue-700 dark:text-blue-400"
+          >
+            Your data is ready. Choose a template below to open the editor.
+          </p>
+        )}
+        {busy && (
+          <p role="status" className="text-sm text-neutral-600 dark:text-neutral-400">
+            Opening your template…
+          </p>
+        )}
         <UniversalUploadZone
           accept={['template']}
           label="Tap to choose your template, or drop it here"
