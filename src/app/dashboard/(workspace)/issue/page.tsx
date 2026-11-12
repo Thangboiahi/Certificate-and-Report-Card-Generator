@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { Suspense } from 'react';
 
 import { KanbanBoard } from '@/components/dashboard/KanbanBoard';
+import { LedgerSection } from '@/components/dashboard/LedgerSection';
 import { sampleRequests } from '@/components/dashboard/sample-requests';
 import { requireRouteAccess } from '@/lib/auth/session';
 import { requestTime } from '@/lib/server/request-time';
@@ -25,6 +26,7 @@ async function IssueHome() {
       <h2 className="mt-4 text-sm font-medium text-neutral-500">Credential requests</h2>
       <p className="text-xs text-neutral-500">Sample requests — moves are not saved yet.</p>
       <KanbanBoard initialRequests={sampleRequests(renderedAt)} renderedAt={renderedAt} />
+      <LedgerSection user={user} renderedAt={renderedAt} />
     </>
   );
 }

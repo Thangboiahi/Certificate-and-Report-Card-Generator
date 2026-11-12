@@ -24,6 +24,7 @@
     "@pdf-lib/fontkit": "1.1.1",
     "@radix-ui/react-dialog": "1.3.1",
     "@radix-ui/react-tabs": "1.2.1",
+    "@tanstack/react-table": "8.21.3",
     "browser-image-compression": "2.0.2",
     "clsx": "2.1.1",
     "comlink": "4.4.2",

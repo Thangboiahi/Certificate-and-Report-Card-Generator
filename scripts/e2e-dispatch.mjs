@@ -5,6 +5,8 @@
  *   - /api/dispatch/whatsapp and /api/dispatch/email: auth, same-origin, validation, credits
  *     deducted before sending, refunds for failed recipients, idempotent replays, 402 when credits
  *     run out, membership and verification checks, 503 when not configured;
+ *   - server-minted claim tokens, the audit ledger and "1-Click Re-Issue" (Phase 6) in Chromium;
+ *   - the claim-token purge route;
  *   - the Kanban board in Chromium: mouse, keyboard and touch drags.
  *
  *     npm run build
@@ -152,7 +154,9 @@ async function startServer(env) {
   };
 }
 
+const CRON_SECRET = 'cron-secret-for-e2e-0123456789abcdef';
 const PROVIDERS = {
+  CRON_SECRET,
   WHATSAPP_ACCESS_TOKEN: 'test-whatsapp-token',
   WHATSAPP_PHONE_NUMBER_ID: '1234567890',
   WHATSAPP_CLAIM_TEMPLATE: 'credential_claim',
@@ -193,12 +197,22 @@ await db.doc('institutions/school-b').set({
 });
 const balance = async () => (await db.doc('institutions/school-a').get()).get('creditBalance');
 
-const FUTURE = '2030-01-15T12:00:00Z';
+await db.doc('templates/tpl-cert').set({
+  ownerUid: people.staff.uid,
+  institutionId: 'school-a',
+  name: 'Class 10 certificate',
+});
+const FUTURE = new Date(Date.now() + 30 * 86_400_000).toISOString();
+const FUTURE_TEXT = new Intl.DateTimeFormat('en-IN', {
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+  timeZone: 'Asia/Kolkata',
+}).format(new Date(FUTURE));
+const CLAIM_LINK = (origin) => new RegExp(`^${origin}/claim/[A-Za-z0-9_-]{43}$`);
 const waTarget = (i, phone = `98765432${String(i).padStart(2, '0')}`) => ({
   recipientName: `Student ${i}`,
   phone,
-  claimToken: `claim-token-${String(i).padStart(8, '0')}`,
-  expiresAt: FUTURE,
 });
 
 const server = await startServer(PROVIDERS);
@@ -224,7 +238,7 @@ try {
         origin,
         ...(who ? { cookie: `__session=${people[who].cookie}` } : {}),
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify({ templateId: 'tpl-cert', tokenExpiry: FUTURE, ...body }),
     });
     return { status: response.status, body: await response.json().catch(() => null) };
   };
@@ -267,6 +281,7 @@ try {
     JSON.stringify(r.body),
   );
   check((await balance()) === 8, 'Firestore balance is 8');
+  const waBatchId = r.body?.batchId;
   const message = provider.whatsapp[0];
   const params = message?.body.template.components[0].parameters.map((p) => p.text);
   check(
@@ -275,8 +290,8 @@ try {
       message.body.template.name === 'credential_claim' &&
       params?.[0] === 'Student 1' &&
       params?.[1] === 'Sunrise Public School' &&
-      params?.[2] === `${server.origin}/claim/claim-token-00000001` &&
-      params?.[3] === '15 Jan 2030',
+      CLAIM_LINK(server.origin).test(params?.[2] ?? '') &&
+      params?.[3] === FUTURE_TEXT,
     'Utility template: name, issuer, claim link on our origin, expiry',
     JSON.stringify(message?.body),
   );
@@ -297,14 +312,10 @@ try {
       {
         recipientName: 'Asha <b>',
         email: 'Asha@Example.in',
-        claimToken: 'claim-token-email-01',
-        expiresAt: FUTURE,
       },
       {
         recipientName: 'Ravi',
         email: 'ravi@example.in',
-        claimToken: 'claim-token-email-02',
-        expiresAt: FUTURE,
       },
     ],
   });
@@ -321,8 +332,8 @@ try {
       batch.body[0].from === 'Claims <claims@example.in>' &&
       batch.body[0].to[0] === 'asha@example.in' &&
       batch.body[0].html.includes('Asha &lt;b&gt;') &&
-      batch.body[0].html.includes(`${server.origin}/claim/claim-token-email-01`) &&
-      batch.body[0].html.includes('expires on 15 Jan 2030'),
+      new RegExp(`${server.origin}/claim/[A-Za-z0-9_-]{43}`).test(batch.body[0].html) &&
+      batch.body[0].html.includes(`expires on ${FUTURE_TEXT}`),
     'one Resend batch with idempotency key, escaped name, claim link and expiry warning',
   );
 
@@ -349,13 +360,141 @@ try {
   );
   check(
     !JSON.stringify(ledger.docs.map((d) => d.data())).includes('98765'),
-    'records hold no phone numbers or emails',
+    'dispatch records hold no phone numbers or emails',
+  );
+  const tokens = await db.collection('claim_tokens').get();
+  const sentLinks = [
+    ...provider.whatsapp.map((m) => m.body.template.components[0].parameters[2].text),
+    ...provider.email[0].body.map((e) => /\/claim\/([A-Za-z0-9_-]{43})/.exec(e.text)?.[1]),
+  ];
+  check(
+    tokens.size === 5 &&
+      tokens.docs.every((d) => /^[a-f0-9]{64}$/.test(d.id)) &&
+      sentLinks.every((link) => link && !tokens.docs.some((d) => link.endsWith(d.id))),
+    '5 claim tokens stored by SHA-256 only (no working link in the database)',
+  );
+  const batches = await db
+    .collection('issued_batches')
+    .where('institutionId', '==', 'school-a')
+    .get();
+  check(
+    batches.size === 2 &&
+      batches.docs.every(
+        (d) =>
+          d.get('templateName') === 'Class 10 certificate' &&
+          d.get('issuerUid') === people.staff.uid &&
+          d.get('tokenExpiry').toMillis() === Date.parse(FUTURE),
+      ),
+    'two issued batches in the audit ledger with issuer, template and link expiry',
+  );
+  r = await post('whatsapp', {
+    idempotencyKey: 'e2e-wa-0004',
+    targets: [waTarget(1)],
+    tokenExpiry: new Date(Date.now() + 120 * 86_400_000).toISOString(),
+  });
+  check(
+    r.status === 400 && /90 days/.test(r.body?.error?.message),
+    'links longer than 90 days → 400',
   );
 
-  console.log('\nKanban board (Chromium)');
+  console.log('\nPurge route');
+  const purge = (secret) =>
+    fetch(`${server.origin}/api/cron/purge-claim-tokens`, {
+      method: 'POST',
+      headers: secret ? { authorization: `Bearer ${secret}` } : {},
+    });
+  let purged = await purge(null);
+  check(purged.status === 401, `no secret → 401 (${purged.status})`);
+  purged = await purge('x'.repeat(40));
+  check(purged.status === 401, 'wrong secret → 401');
+  purged = await purge(CRON_SECRET);
+  const purgedBody = await purged.json();
+  check(
+    purged.status === 200 && purgedBody.deleted === 0 && purgedBody.batchesPurged === 0,
+    'right secret → 200, nothing expired yet so nothing purged',
+  );
+
   const { chromium } = createRequire(import.meta.url)('playwright');
   const browser = await chromium.launch();
   try {
+    console.log('\nAudit ledger and 1-Click Re-Issue (Chromium)');
+    {
+      const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+      await context.addCookies([
+        { name: '__session', value: people.staff.cookie, url: server.origin },
+      ]);
+      const page = await context.newPage();
+      const errors = [];
+      page.on('pageerror', (error) => errors.push(error.message));
+      await page.goto(`${server.origin}/dashboard/institution`);
+      await page.getByTestId('audit-ledger').waitFor();
+      const rows = page.getByTestId('ledger-row');
+      check((await rows.count()) === 2, `ledger lists the 2 batches (${await rows.count()})`);
+      const waRow = page.locator(`[data-testid=ledger-row][data-batch-id="${waBatchId}"]`);
+      check(
+        /Class 10 certificate/.test(await waRow.innerText()) &&
+          /3\s*\(2 sent, 1 failed\)/.test(await waRow.innerText()) &&
+          /30 days left/.test(await waRow.innerText()),
+        'row shows template, 3 recipients (2 sent, 1 failed) and "30 days left"',
+        await waRow.innerText(),
+      );
+      const before = { messages: provider.whatsapp.length, balance: await balance() };
+      const oldLinks = new Set(
+        provider.whatsapp.map((m) => m.body.template.components[0].parameters[2].text),
+      );
+      await waRow.getByTestId('reissue').click();
+      const status = waRow.getByTestId('reissue-status');
+      await status.waitFor({ timeout: 15_000 });
+      const reissued = provider.whatsapp.slice(before.messages);
+      check(
+        /Sent 2 of 3 new links · 1 failed · no credits used/.test(await status.innerText()),
+        `re-issue reports the result (${await status.innerText()})`,
+      );
+      check(
+        reissued.length === 3 &&
+          reissued.every((m) => {
+            const link = m.body.template.components[0].parameters[2].text;
+            return CLAIM_LINK(server.origin).test(link) && !oldLinks.has(link);
+          }),
+        'all 3 unclaimed recipients got a NEW link through WhatsApp',
+      );
+      check((await balance()) === before.balance, `no credits used (balance ${await balance()})`);
+      check(
+        /Just re-issued/.test(await waRow.getByTestId('reissue').innerText()) &&
+          (await waRow.getByTestId('reissue').isDisabled()) &&
+          /1\/3 re-issues/.test(await waRow.innerText()),
+        'button now shows the cooldown and 1/3 re-issues',
+      );
+      const again = await fetch(`${server.origin}/api/dispatch/reissue`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          origin: server.origin,
+          cookie: `__session=${people.staff.cookie}`,
+        },
+        body: JSON.stringify({ batchId: waBatchId }),
+      });
+      const againBody = await again.json();
+      check(
+        again.status === 409 && againBody.error.details?.reason === 'cooldown',
+        'an immediate second re-issue → 409 cooldown',
+      );
+      const foreign = await fetch(`${server.origin}/api/dispatch/reissue`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          origin: server.origin,
+          cookie: `__session=${people.unverifiedAdmin.cookie}`,
+        },
+        body: JSON.stringify({ batchId: waBatchId }),
+      });
+      check(foreign.status === 404, `another institution's admin → 404 (${foreign.status})`);
+      await page.screenshot({ path: join(out, 'e2e-audit-ledger.png'), fullPage: true });
+      check(errors.length === 0, 'ledger: no script errors', errors.join(' | '));
+      await context.close();
+    }
+
+    console.log('\nKanban board (Chromium)');
     for (const [label, options] of [
       ['desktop', { viewport: { width: 1280, height: 900 } }],
       ['phone', { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }],
@@ -483,6 +622,11 @@ console.log('\nNot configured');
       'no provider keys → 503 before anything is charged',
     );
     check((await balance()) === 6, 'balance unchanged');
+    const cron = await fetch(`${bare.origin}/api/cron/purge-claim-tokens`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${CRON_SECRET}` },
+    });
+    check(cron.status === 503, 'no CRON_SECRET → purge route answers 503');
   } finally {
     await bare.stop();
   }
