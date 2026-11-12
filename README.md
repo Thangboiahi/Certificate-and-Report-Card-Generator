@@ -4,8 +4,8 @@ Certificates, report cards, ID cards and letters for everyone on a list: one tem
 spreadsheet in, hundreds of filled PDFs out, generated in the browser. Built for the Indian
 education and B2B market (Indian scripts, photos, QR verification).
 
-**Status:** milestone M0 (engine foundation) complete; the product around it (sign-in, editor,
-data intake, billing, admin) is next. See [docs/PLAN.md](docs/PLAN.md).
+**Status:** Phase 1 of 9 (RBAC & Foundation) in progress, on top of a finished PDF engine.
+Development runs against local Firebase emulators. See [docs/PLAN.md](docs/PLAN.md).
 
 ## Try it
 
