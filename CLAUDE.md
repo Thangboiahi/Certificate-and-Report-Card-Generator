@@ -39,17 +39,19 @@ them.
 
 ## Commands
 
-| Command                           | What it does                                                           |
-| --------------------------------- | ---------------------------------------------------------------------- |
-| `npm run dev`                     | Dev server on http://localhost:3000 (playground at `/playground`)      |
-| `npm test`                        | Unit tests (Vitest, Node environment)                                  |
-| `npm run typecheck`               | `next typegen` + `tsc --noEmit`                                        |
-| `npm run lint`                    | ESLint                                                                 |
-| `npm run format`                  | Prettier                                                               |
-| `npm run verify`                  | Everything above plus a production build — run before pushing          |
-| `node scripts/e2e-playground.mjs` | Drives the playground in Chromium: Worker + proxy end to end           |
-| `npm run test:emulator`           | Claims, sessions, proxy and Firestore rules against Firebase emulators |
-| `scripts/e2e-auth.mjs`            | Auth end to end on the production build (see the file header)          |
+| Command                           | What it does                                                            |
+| --------------------------------- | ----------------------------------------------------------------------- |
+| `npm run dev`                     | Dev server on http://localhost:3000 (playground at `/playground`)       |
+| `npm test`                        | Unit tests (Vitest, Node environment)                                   |
+| `npm run typecheck`               | `next typegen` + `tsc --noEmit`                                         |
+| `npm run lint`                    | ESLint                                                                  |
+| `npm run format`                  | Prettier                                                                |
+| `npm run verify`                  | Everything above plus a production build — run before pushing           |
+| `node scripts/e2e-playground.mjs` | Drives the playground in Chromium: Worker + proxy end to end            |
+| `npm run test:emulator`           | Claims, sessions, proxy and Firestore rules against Firebase emulators  |
+| `scripts/e2e-auth.mjs`            | Auth end to end on the production build (see the file header)           |
+| `node scripts/e2e-batch.mjs`      | 2,500-row ZIP batch in Chromium with worker heap sampling (after build) |
+| `node scripts/e2e-uploads.mjs`    | Upload gateway in Chromium (phone and desktop)                          |
 
 ## Rules of the codebase
 

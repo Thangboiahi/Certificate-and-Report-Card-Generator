@@ -5,6 +5,31 @@ was verified, and what is left open. The line-by-line history is in git; this fi
 
 ---
 
+## 2026-11-12 — Session 5: Phase 3, core PDF engine (worker, ZIP, proxy)
+
+**Built.** The worker moved to `src/workers/pdf.worker.ts` and gained
+`generatePdfBatch(template, dataRows, settings, callbacks?)`, which returns one ZIP as a Blob
+(`src/workers/zip-writer.ts`, JSZip streaming). The client moved to `src/lib/pdfEngine.ts`
+(`Comlink.wrap`, `generatePdfBatch`/`generate`/`readPdfPages`, `saveBlob`). The image proxy
+accepts the session cookie. The playground gained a ZIP mode and a 2,500-row batch;
+`scripts/e2e-batch.mjs` was added. Decisions in ADR-021 (including why the proxy did not get the
+permissive CORS headers the brief asked for).
+
+**Found and fixed.** Through comlink every property of a remote object looks like a function, so
+the worker cannot test whether an optional callback was supplied; the client now always supplies
+both batch callbacks.
+
+**Verified.** `scripts/e2e-batch.mjs` (Chromium, production build): 2,500 rows → 2,500 uniquely
+named PDFs in a 71.2 MB ZIP in 64 s; the worker's V8 heap, sampled 257 times over the DevTools
+protocol, peaked at 35.2 MB; sampled PDFs open with two pages; cancelling at ~200 rows returns no
+ZIP; the worker keeps working afterwards. 439 unit tests (ZIP writer, proxy cookie auth) pass;
+the playground and upload browser suites still pass; tsc, eslint, build clean.
+
+**Open.** Not measured on a real mid-range Android phone (speed estimate ~4–6 min for 2,500
+separate files). The batch is not yet started from a real screen.
+
+---
+
 ## 2026-11-12 — Session 4: Phase 2, universal uploader and image editor
 
 **Built.** `src/lib/utils/imageEditor.ts` (canvas crop, compression to ≤ 200 KB),

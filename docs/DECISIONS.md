@@ -606,3 +606,35 @@ behaviours are verified only by Firebase's own guarantees and code review.
   hint for case/spacing near-matches), on empty files, and above 2,500 rows (PLAN E11).
 - Uploads are limited to JPG, PNG and WebP images (20 MB before editing) and CSV (5 MB). HEIC
   from iPhones is not accepted yet: Chromium cannot decode it.
+
+---
+
+## ADR-021 — Batch output: streamed ZIP of Blobs; the image proxy stays same-origin (no CORS)
+
+**Date:** 2026-11-12 · **Status:** Accepted
+
+**ZIP without holding the batch in memory.** `generatePdfBatch` returns one ZIP for up to 2,500
+rows on a mid-range phone. Held as byte arrays in the worker, 2,500 PDFs (≈ 70 MB in the
+playground sample, far more with photo-heavy templates) plus JSZip's copy would crash the tab.
+Instead each PDF becomes a `Blob` as soon as it is produced (the browser's blob store holds it
+outside the JS heap and can page it to disk); JSZip reads those back one at a time while writing
+the archive with `generateInternalStream`, and output chunks are gathered into Blobs every 4 MB.
+Entries are STORED (PDFs are already compressed). Measured: 2,500 rows → 71.2 MB ZIP with the
+worker's heap peaking at 35 MB. The result is a `Blob`, not an `ArrayBuffer`, for the same reason.
+A cancelled batch returns no ZIP.
+
+**No permissive CORS on `/api/proxy-image` (the brief asked for it).** The Web Worker fetches the
+proxy from the app's own origin, and same-origin responses never taint a canvas, so CORS headers
+add nothing. `Access-Control-Allow-Origin: *` would only let other websites use the proxy (and the
+images it fetches) — ADR-005's same-origin design is kept. Instead the proxy now also accepts the
+session cookie, which the browser attaches to the worker's same-origin fetches automatically, so
+the worker needs no token plumbing; a bearer ID token still works (e.g. anonymous guests). The
+cookie is SameSite=Lax, so other sites' pages cannot make the browser send it on sub-requests.
+
+**Text sizing.** The brief's "shrink while `font.widthOfTextAtSize` exceeds `maxWidth`" is
+implemented by the engine's shrink-to-fit (ADR-007) with shaped widths; pdf-lib's
+`widthOfTextAtSize` is wrong for Indian scripts and for kerned text.
+
+**Consequences.** Separate-file batches run at ~40 rows/s on the development machine (each PDF is
+the full template saved again); expect several times slower on a phone (~4–6 minutes for 2,500).
+Merged output is ~7× faster and smaller when per-person files are not required.

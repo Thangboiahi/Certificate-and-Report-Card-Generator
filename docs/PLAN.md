@@ -58,11 +58,12 @@ phase's scope is recorded here when its brief arrives, never guessed in advance.
 
 Status key: ✅ done and verified · 🟡 in progress · ⬜ not started
 
-| Phase | Name                              | Status                                 |
-| ----- | --------------------------------- | -------------------------------------- |
-| 1     | RBAC & Foundation                 | 🟡 (login page, super-admin seed open) |
-| 2     | Universal Uploader & Image Editor | ✅                                     |
-| 3–9   | To be briefed                     | ⬜                                     |
+| Phase | Name                                           | Status                                 |
+| ----- | ---------------------------------------------- | -------------------------------------- |
+| 1     | RBAC & Foundation                              | 🟡 (login page, super-admin seed open) |
+| 2     | Universal Uploader & Image Editor              | ✅                                     |
+| 3     | Core PDF Engine (Web Worker, ZIP, image proxy) | ✅                                     |
+| 4–9   | To be briefed                                  | ⬜                                     |
 
 ### Phase 1 — RBAC & Foundation (current)
 
@@ -88,6 +89,16 @@ Every upload passes a client-side Preview ➔ Crop/Audit ➔ Confirm gateway.
 | `CsvPreviewModal`: first 5 rows, red warning and blocked confirm for missing columns | ✅              |
 | `UniversalUploadZone`: drop/tap, routes images and CSVs to the right modal           | ✅              |
 | Wiring into real screens (template upload, data intake)                              | ⬜ later phases |
+
+### Phase 3 — Core PDF Engine (Web Worker & image proxy)
+
+| Item                                                                                                  | Status |
+| ----------------------------------------------------------------------------------------------------- | ------ |
+| `src/workers/pdf.worker.ts`: `generatePdfBatch(template, rows, settings)` → one ZIP (Blob)            | ✅     |
+| `src/lib/pdfEngine.ts`: client wrapper via `Comlink.wrap`, progress, cancel, `saveBlob`               | ✅     |
+| `/api/proxy-image`: accepts the session cookie (same-origin worker fetches) as well as a bearer token | ✅     |
+| 2,500-row batch verified in Chromium; worker heap stays flat                                          | ✅     |
+| Measured on a real mid-range Android phone                                                            | ⬜     |
 
 ### Foundation already built (before the phase plan)
 
