@@ -1,6 +1,6 @@
 # Architecture
 
-How the system works **today** (end of session 1). Reasons for the choices are in
+How the system works **today** (end of session 2). Reasons for the choices are in
 [DECISIONS.md](./DECISIONS.md); status and roadmap are in [PLAN.md](./PLAN.md).
 
 ## Overview
@@ -33,6 +33,10 @@ and Razorpay are **not wired yet** (milestones M1–M6).
 | `src/lib/image-proxy/`                  | Proxy logic: auth, SSRF defences, safe fetch, handler (framework-independent)                 |
 | `src/app/api/proxy-image/`              | Thin Next.js route over the handler                                                           |
 | `src/workers/`                          | Web Worker, comlink client, image loader, canvas image processor                              |
+| `src/types/roles.ts`                    | Roles, claims contract, institution / vault item schemas                                      |
+| `src/lib/auth/`, `src/proxy.ts`         | Claims management, sessions, route protection, server-side guards                             |
+| `src/app/api/auth/session/`             | Creates / clears the session cookie                                                           |
+| `firebase/`, `firebase.json`            | Firestore security rules and their emulator tests                                             |
 | `src/app/playground/`                   | Developer harness that runs the whole stack on a sample job                                   |
 | `tests/`, `scripts/`, `public/samples/` | Test support and fixtures, e2e script and asset generators, sample template and photos        |
 
@@ -101,6 +105,41 @@ from environment variables (`.env.example`).
 
 The route calls `await connection()` so Next 16 never prerenders it.
 
+## Authentication and roles (V6 Phase 1)
+
+```
+Browser ── Google Sign-In (Firebase client SDK) ── ID token
+   │ POST /api/auth/session  (same-origin, fresh sign-in, not anonymous)
+   ▼
+__session cookie (httpOnly, Secure, SameSite=Lax, 5 days)
+   │ every request
+   ▼
+src/proxy.ts ── verify cookie (Admin SDK) ── route rules ── 307 /login · 403 · next
+   │                (+ revocation check on /admin, /dashboard/institution)
+   ▼
+pages / route handlers / server actions ── requireRouteAccess() / authorize()   (verify again)
+```
+
+| Path                       | Who                               |
+| -------------------------- | --------------------------------- |
+| `/admin/*`                 | super_admin                       |
+| `/dashboard/institution/*` | inst_admin, inst_staff            |
+| `/dashboard/vault/*`       | any signed-in, non-anonymous user |
+| `/dashboard/*` (other)     | any signed-in user (fail closed)  |
+| `/editor`                  | everyone, including guests        |
+
+- **Roles** (`src/types/roles.ts`): guest and individual are derived from the token; the elevated
+  roles are custom claims `{ role, institutionId? }`. Pure logic (claim parsing, route table,
+  decisions) is in `src/lib/auth/access.ts` and shared by the proxy, server code and tests.
+- **Claims management** (`src/lib/auth/customClaims.ts`): `setUserRole` / `grantSuperAdmin` /
+  `setInstitutionRole` / `removeElevatedRole`, keeping `institutions/{id}` directory fields in step
+  and revoking sessions on demotion. Verification helpers return `null` for bad tokens and throw
+  when verification cannot run.
+- **Firestore rules** (`firebase/firestore.rules`): see ADR-018. Deploy with
+  `firebase deploy --only firestore:rules` (config in `firebase.json`).
+- Environment: `FIREBASE_PROJECT_ID` (required), `APP_ORIGIN` (optional, public origin for the
+  session route's same-origin check behind a proxy).
+
 ## Web Worker
 
 `createPdfEngineClient()` starts the worker and wraps it with comlink. Callbacks (`onDocument`,
@@ -125,7 +164,11 @@ Cloud Run notes for when it is deployed:
 
 ## Testing
 
-- `npm test` — 360 unit/integration tests (Node). Engine tests render PDFs with poppler
+- `npm test` — 430 unit/integration tests (Node). Engine tests render PDFs with poppler
   (`pdftoppm`/`pdftotext`) and assert on pixels and word positions; they skip without poppler.
 - `tests/showcase.test.ts` writes pictures to `tests/output/` for visual review.
 - `node scripts/e2e-playground.mjs` (after `npm run build`) — production server + Chromium.
+- `npm run test:emulator` — 34 tests against the Firebase Auth + Firestore emulators (claims,
+  sessions, proxy, rules).
+- `firebase emulators:exec --only auth,firestore --project demo-v6 'node scripts/e2e-auth.mjs'`
+  (after `npm run build`) — 47 auth checks against the production server.

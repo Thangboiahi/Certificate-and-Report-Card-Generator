@@ -4,8 +4,16 @@ All notable changes. Newest first. Details and reasoning: `docs/DEVLOG.md`, `doc
 
 ## Unreleased
 
+### Changed
+
+- `TemplateRecord.ownerId` is now `ownerUid`, with `institutionId` and server timestamps.
+
 ### Added
 
+- V6 Phase 1, roles and access control: role types, custom-claims management, session cookies
+  (`/api/auth/session`), route protection (`src/proxy.ts`) for `/admin`,
+  `/dashboard/institution`, `/dashboard/vault` and `/editor`, server-side page guards, and
+  Firestore security rules for institutions, templates and vault items, with emulator tests.
 - Template schema for multi-page documents with text, image and QR placeholders, runtime
   validation and data bindings.
 - `/api/proxy-image`: authenticated, SSRF-safe image relay for the browser-side engine.

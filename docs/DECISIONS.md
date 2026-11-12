@@ -12,23 +12,27 @@ when to revisit it. This is the file to open when someone asks "why is it built 
 - Status is one of: `Proposed` (needs the executive's sign-off), `Accepted`, `Superseded`.
 - "Revisit when" names the concrete signal that should make us reconsider.
 
-| #   | Decision                                                            | Status   |
-| --- | ------------------------------------------------------------------- | -------- |
-| 001 | Generate PDFs in the browser; keep the server thin                  | Accepted |
-| 002 | Next.js 16 (App Router, Cache Components) as a Cloud Run container  | Accepted |
-| 003 | Template geometry: points, top-left of the displayed page           | Accepted |
-| 004 | Placeholders bind to data by column / token template / static value | Accepted |
-| 005 | Image proxy security model                                          | Accepted |
-| 006 | pdf-lib 1.17.1, pinned and isolated behind `src/lib/pdf-engine`     | Accepted |
-| 007 | Draw text glyph-by-glyph from fontkit's shaping output              | Accepted |
-| 008 | One warm font instance per job, shared by every document            | Accepted |
-| 009 | Two output modes: separate files and one merged print file          | Accepted |
-| 010 | Handle rotated/cropped PDFs with transforms, not per-shape maths    | Accepted |
-| 011 | Images: honour EXIF orientation; `cover`/`contain` by clipping      | Accepted |
-| 012 | QR codes drawn as vector squares                                    | Accepted |
-| 013 | The engine is environment-agnostic; the Worker is a thin adapter    | Accepted |
-| 014 | Project memory lives in `docs/` and is updated every session        | Accepted |
-| 015 | Google access via `drive.file` + Google Picker only                 | Proposed |
+| #   | Decision                                                                               | Status   |
+| --- | -------------------------------------------------------------------------------------- | -------- |
+| 001 | Generate PDFs in the browser; keep the server thin                                     | Accepted |
+| 002 | Next.js 16 (App Router, Cache Components) as a Cloud Run container                     | Accepted |
+| 003 | Template geometry: points, top-left of the displayed page                              | Accepted |
+| 004 | Placeholders bind to data by column / token template / static value                    | Accepted |
+| 005 | Image proxy security model                                                             | Accepted |
+| 006 | pdf-lib 1.17.1, pinned and isolated behind `src/lib/pdf-engine`                        | Accepted |
+| 007 | Draw text glyph-by-glyph from fontkit's shaping output                                 | Accepted |
+| 008 | One warm font instance per job, shared by every document                               | Accepted |
+| 009 | Two output modes: separate files and one merged print file                             | Accepted |
+| 010 | Handle rotated/cropped PDFs with transforms, not per-shape maths                       | Accepted |
+| 011 | Images: honour EXIF orientation; `cover`/`contain` by clipping                         | Accepted |
+| 012 | QR codes drawn as vector squares                                                       | Accepted |
+| 013 | The engine is environment-agnostic; the Worker is a thin adapter                       | Accepted |
+| 014 | Project memory lives in `docs/` and is updated every session                           | Accepted |
+| 015 | Google access via `drive.file` + Google Picker only                                    | Proposed |
+| 016 | Elevated roles as Firebase custom claims: one role, one institution                    | Accepted |
+| 017 | Sessions: Firebase session cookies, verified in the proxy and again in server code     | Accepted |
+| 018 | Firestore rules model for institutions, templates and vault items                      | Accepted |
+| 019 | Security is tested against Firebase emulators; emulators can never be on in production | Accepted |
 
 ---
 
@@ -466,3 +470,117 @@ unalarming.
 Private photo folders need a multi-select in Picker rather than a pasted folder link.
 
 **Revisit when** the Picker flow proves too clumsy in user testing.
+
+---
+
+## ADR-016 — Elevated roles as Firebase custom claims: one role, one institution
+
+**Date:** 2026-11-12 · **Status:** Accepted
+
+**Context.** V6 adds a credential platform with five roles: `guest`, `individual` (including
+Micro-Issuers), `inst_staff`, `inst_admin` and `super_admin`. Access must be decided identically by
+the proxy, server code and Firestore security rules.
+
+**Decision.**
+
+- `guest` and `individual` are never stored: they are derived from the token (anonymous or absent
+  → guest; any other sign-in → individual).
+- The three elevated roles are custom claims: `{ role: 'super_admin' }` or
+  `{ role: 'inst_admin' | 'inst_staff', institutionId }`. A user holds **one** elevated role and
+  belongs to **one** institution. Malformed claims count as no role (fail closed).
+- Claims are the authority. `institutions/{id}.adminUid` / `staffUids` are a directory for
+  display, kept in step by `setUserRole` with a fixed order: add to the new directory → swap the
+  claims in one write → remove from the old directory → revoke sessions if any access was taken
+  away. A failure at any step leaves at most the access the user had before.
+- One admin per institution: replacing an admin is an explicit two-step change.
+- Unrelated custom claims on a user are preserved.
+
+**Why.** Claims travel inside every verified token, so checks cost no database reads (rules
+included). Single role + single institution keeps rules and checks simple and auditable.
+
+**Consequences.** Someone who works for two institutions needs two accounts. Claim changes reach
+a user only when they sign in again — demotions force this by revoking sessions. The first
+super admin must be granted out of band (Admin SDK with the project owner's credentials).
+
+**Revisit when** multi-institution staff become a real need (then: a membership collection
+checked by rules, at the cost of a read per check).
+
+---
+
+## ADR-017 — Sessions: Firebase session cookies, verified in the proxy and again in server code
+
+**Date:** 2026-11-12 · **Status:** Accepted
+
+**Decision.**
+
+- After Google Sign-In in the browser, the fresh ID token is posted to `POST /api/auth/session`,
+  which mints a Firebase **session cookie** (`__session`, httpOnly, Secure, SameSite=Lax,
+  5 days). It requires a non-anonymous account, an unrevoked token and a sign-in within the last
+  5 minutes, and only accepts same-origin calls (login-CSRF protection).
+- **`src/proxy.ts`** (Next.js 16 renamed `middleware.ts` to `proxy.ts`; the old name is
+  deprecated) runs on the Node.js runtime, so it verifies the cookie with the Admin SDK — a real
+  cryptographic check, not a cookie-presence check. Privileged areas (`/admin`,
+  `/dashboard/institution`) also check revocation with Firebase Auth, so a demoted user is locked
+  out immediately; ordinary areas skip that network call.
+- The proxy matcher covers every request except build assets, and route rules are matched on a
+  canonical path (decoded, lower-cased, slashes collapsed). Encoded, re-cased and dot-segment
+  variants of protected paths were tested against the production server; none got through.
+- **Defence in depth:** pages, route handlers and server actions re-verify through
+  `requireRouteAccess` / `authorize` (`src/lib/auth/session.ts`), as Next's security guidance
+  requires. Pages read the session inside `<Suspense>` (Cache Components).
+- If verification cannot run (misconfiguration, Google key fetch failure) the proxy answers 503
+  rather than treating the user as signed out.
+
+**Why.** Session cookies work for server rendering, can be revoked, and keep tokens out of page
+scripts. Verifying in the proxy gives correct HTTP statuses (307/403) before rendering; verifying
+again in server code means a proxy bypass (as in CVE-2025-29927) exposes nothing.
+
+**Consequences.** Privileged pages make two Auth calls per request (proxy + page). Acceptable for
+low-traffic admin areas; a short per-instance cache is the optimisation if needed. Pages deny
+with 404 (hiding privileged areas) while the proxy uses 403.
+
+---
+
+## ADR-018 — Firestore rules model for institutions, templates and vault items
+
+**Date:** 2026-11-12 · **Status:** Accepted
+
+**Decision** (`firebase/firestore.rules`):
+
+- **institutions:** read by that institution's staff/admin and super admins; written only by
+  super admins, with shape validation (`creditBalance` a non-negative integer).
+- **templates:** personal templates (`institutionId: null`) are managed by their owner (a
+  Micro-Issuer); institution templates by that institution's admin, readable by its staff.
+  `ownerUid`, `institutionId` and `createdAt` are immutable; timestamps must be server times.
+  The brief's `owner_uid` is spelled `ownerUid` to match every other field in the schema.
+- **vault_items:** created by the issuer — a Micro-Issuer under their own uid, or staff/admin for
+  their institution — and only from a template belonging to that issuer. A new
+  `issuerType: 'institution' | 'individual'` field removes the ambiguity of `issuerId` alone.
+  `issuedAt` must be the server time (no backdating); `expiresAt` must be in the future or null.
+  Read by the recipient (`ownerUid`), the issuer and super admins. The only allowed update is a
+  one-way revocation (`valid` → `revoked` with a server `revokedAt`). Deletes are denied:
+  credentials are records.
+- Anonymous sessions are never accounts, whatever claims they carry. Everything else is denied.
+
+**Consequences.** Issuing directly from the browser does not consume institution credits — rules
+cannot safely debit `creditBalance` (only super admins may write institutions). Before credits
+are enforced, issuance should move to a server route that debits credits in a transaction, and
+`vault_items` creation should then be closed to clients. Logged as PLAN Q3.
+
+---
+
+## ADR-019 — Security is tested against Firebase emulators; emulators can never be on in production
+
+**Date:** 2026-11-12 · **Status:** Accepted
+
+**Decision.** Claims, sessions, the proxy and the rules are tested against the real Firebase Auth
+and Firestore emulators (`npm run test:emulator`, project `demo-v6`), and end to end against the
+production build (`scripts/e2e-auth.mjs`). The rules suite was checked to be meaningful: with
+allow-all rules, 14 of its 18 tests fail.
+
+With an emulator variable set, the Admin SDK accepts **unsigned** tokens. Initialisation
+therefore refuses to run when an emulator variable is present on Cloud Run (`K_SERVICE`), or in
+any production build unless `ALLOW_FIREBASE_EMULATOR=true` (local end-to-end tests only).
+
+**Limits.** The emulator always checks revocation and never checks signatures, so those two
+behaviours are verified only by Firebase's own guarantees and code review.

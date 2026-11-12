@@ -5,6 +5,71 @@ was verified, and what is left open. The line-by-line history is in git; this fi
 
 ---
 
+## 2026-11-12 — Session 2: V6 Phase 1, foundation and role-based access control
+
+**Goal.** The product grows into a B2B2C credential platform (V6). Establish roles (guest,
+individual/Micro-Issuer, institution staff and admin, super admin) as Firebase custom claims,
+route protection, and Firestore security rules for institutions, templates and vault items.
+
+### Built
+
+- `src/types/roles.ts` — roles, the claims contract, `InstitutionSchema`, `VaultItemSchema`.
+- `src/lib/auth/access.ts` — pure RBAC: claim parsing, role derivation, route table, decisions.
+- `src/lib/auth/customClaims.ts` — Admin SDK role management (directory sync, revocation on
+  demotion) and cookie / ID-token verification.
+- `src/lib/auth/session.ts`, `session-cookie.ts`, `src/app/api/auth/session/route.ts` — session
+  cookies and server-side guards; guarded placeholder pages for `/admin`,
+  `/dashboard/institution`, `/dashboard/vault`.
+- `src/proxy.ts` — route protection (Next.js 16's replacement for `middleware.ts`).
+- `firebase/firestore.rules`, `firebase.json` — rules and emulator configuration.
+- Tests: `access.test.ts`, `session.test.ts`, `auth.emulator.test.ts`,
+  `firestore.rules.emulator.test.ts`, `scripts/e2e-auth.mjs`.
+
+### Deviations from the brief (all recorded in ADRs 016–018)
+
+- `middleware.ts` → `src/proxy.ts`: the old name is deprecated in Next.js 16. Files live under
+  `src/` because the project uses a `src` directory.
+- Templates use `ownerUid` (the brief wrote `owner_uid`) to match the rest of the schema;
+  `TemplateRecord.ownerId` was renamed and gained `institutionId` and server timestamps.
+- Vault items gained `issuerType` and `revokedAt`; deletes are denied; revocation is one-way.
+- `InstitutionSchema.adminUid` is nullable (an institution can exist before its admin).
+- Writes to institution templates are admin-only; staff can read them and issue from them.
+
+### Found and fixed along the way
+
+- The session route's same-origin check compared against the URL Next reconstructs, which
+  differs behind the standalone server; every sign-in was refused. Now compares the `Origin`
+  host with the `Host` / `X-Forwarded-Host` header, as Next does for Server Actions.
+- The Auth emulator always checks revocation, so a test assuming the opposite was rewritten.
+
+### Verified
+
+- `npm test`: 430 tests pass (access policy 64, page guard 6, plus all earlier suites).
+- `npm run test:emulator`: 34 pass — claims (role walk with directory sync, idempotency, one
+  admin per institution, invalid input), sessions (anonymous, stale sign-in, wrong project,
+  expired, revoked), the session route (cookie attributes, cross-origin, malformed input) and the
+  proxy (role × route table, disguised paths, revocation), plus 18 rules tests. With allow-all
+  rules, 14 of the 18 rules tests fail, so they test something.
+- `scripts/e2e-auth.mjs` against the production build: 47 checks pass — every role on every
+  protected route, 13 disguised paths (`/%61dmin`, `/ADMIN`, `/api/../admin`,
+  `/_next/static/../../admin`, …) none of which reached privileged content, RSC requests,
+  revocation, sign-out, and fail-closed behaviour when emulator variables meet `K_SERVICE`.
+- `scripts/e2e-playground.mjs` still passes with the proxy on every request.
+- `tsc --noEmit`, `eslint`, `next build` clean.
+
+### Open
+
+- No `/login` page yet: unauthenticated visitors are redirected to `/login?next=…`, which 404s
+  until the Google Sign-In UI is built (needs the Firebase web config, PLAN E2). Validate `next`
+  with `safeReturnPath` there.
+- Not run against a real Firebase project (needs E1/E2). Signature verification and the
+  non-revocation path can only be exercised there.
+- First super admin: grant out of band with the Admin SDK once the project exists (E6).
+- Credits are not debited when credentials are issued from the browser (PLAN Q3, ADR-018).
+- The Docker image is still unbuilt (session 1).
+
+---
+
 ## 2026-11-11 — Session 1: foundation of the PDF engine
 
 **Goal.** Starting from an empty repository, deliver the foundation of the generation engine:

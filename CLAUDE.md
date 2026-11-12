@@ -39,15 +39,17 @@ them.
 
 ## Commands
 
-| Command                           | What it does                                                      |
-| --------------------------------- | ----------------------------------------------------------------- |
-| `npm run dev`                     | Dev server on http://localhost:3000 (playground at `/playground`) |
-| `npm test`                        | Unit tests (Vitest, Node environment)                             |
-| `npm run typecheck`               | `next typegen` + `tsc --noEmit`                                   |
-| `npm run lint`                    | ESLint                                                            |
-| `npm run format`                  | Prettier                                                          |
-| `npm run verify`                  | Everything above plus a production build — run before pushing     |
-| `node scripts/e2e-playground.mjs` | Drives the playground in Chromium: Worker + proxy end to end      |
+| Command                           | What it does                                                           |
+| --------------------------------- | ---------------------------------------------------------------------- |
+| `npm run dev`                     | Dev server on http://localhost:3000 (playground at `/playground`)      |
+| `npm test`                        | Unit tests (Vitest, Node environment)                                  |
+| `npm run typecheck`               | `next typegen` + `tsc --noEmit`                                        |
+| `npm run lint`                    | ESLint                                                                 |
+| `npm run format`                  | Prettier                                                               |
+| `npm run verify`                  | Everything above plus a production build — run before pushing          |
+| `node scripts/e2e-playground.mjs` | Drives the playground in Chromium: Worker + proxy end to end           |
+| `npm run test:emulator`           | Claims, sessions, proxy and Firestore rules against Firebase emulators |
+| `scripts/e2e-auth.mjs`            | Auth end to end on the production build (see the file header)          |
 
 ## Rules of the codebase
 
@@ -66,6 +68,13 @@ them.
 - Next.js 16 specifics: no `runtime` / `dynamic` / `revalidate` exports; API routes that must run
   per request start with `await connection()` (ADR-002).
 - Geometry is always in PDF points from the top-left of the displayed page (ADR-003).
+- **Every protected page, route handler and server action re-checks access** with
+  `requireRouteAccess` / `authorize` from `src/lib/auth/session.ts`; the proxy is the first gate,
+  not the only one (ADR-017). New protected areas get a rule in `ROUTE_RULES`.
+- Claim names and collection names are shared between `src/types/roles.ts` and
+  `firebase/firestore.rules`: change both together, and extend the rules tests with every rules
+  change (`npm run test:emulator`).
+- Never set Firebase emulator variables on a deployed server (ADR-019).
 
 ## Environment notes
 

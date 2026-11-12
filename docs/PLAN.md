@@ -3,7 +3,7 @@
 The single place to see what we are building, where we are, what comes next, and what is waiting
 on a decision. Updated at the end of every working session.
 
-**Last updated:** 2026-11-11 (end of session 1)
+**Last updated:** 2026-11-12 (end of session 2)
 
 Related records: [ARCHITECTURE.md](./ARCHITECTURE.md) (how it works) ·
 [DECISIONS.md](./DECISIONS.md) (why) · [DEVLOG.md](./DEVLOG.md) (history)
@@ -27,6 +27,17 @@ Google Sheet, often with names in a regional language.
 - It is designed for phones first, including placing fields by tapping on the template.
 - It handles Indian scripts properly, multi-page documents, and photos.
 
+### V6 direction (from session 2): a B2B2C credential platform
+
+Beyond generating documents, the platform issues **credentials into recipients' vaults**:
+
+- **Independent users** keep the credentials issued to them in a personal vault.
+- **Micro-Issuers** (individuals) design templates and issue credentials under their own name.
+- **Institutions** issue through their **staff** and **admin**, spending prepaid **credits**.
+- **Super Admins** run the platform (institutions, tiers, users, revenue).
+
+Phase 1 of V6 (roles, sessions, route protection, Firestore rules) is done — see the roadmap.
+
 ## 2. Fixed constraints (set by the executive)
 
 | Area       | Constraint                                                                                      |
@@ -46,7 +57,7 @@ Status key: ✅ done and verified · 🟡 in progress · ⬜ not started
 | #   | Milestone                 | What it delivers                                                                                                                                                           | Status                                   |
 | --- | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
 | M0  | **PDF engine foundation** | Template schema, image proxy, generation engine, Web Worker, developer playground, Cloud Run container                                                                     | ✅ (Docker image still to be built once) |
-| M1  | **Platform**              | Firebase project wiring, Google Sign-In, Firestore data model and security rules, Cloud Storage, app shell (navigation, themes), CI/CD to Cloud Run                        | ⬜                                       |
+| M1  | **Platform**              | Firebase project wiring, Google Sign-In, Firestore data model and security rules, Cloud Storage, app shell (navigation, themes), CI/CD to Cloud Run                        | 🟡 RBAC done (V6 Phase 1)                |
 | M2  | **Template editor**       | Upload a PDF or image as a template, render pages, Tap-to-Place, properties panel, font picker, live preview from the real engine                                          | ⬜                                       |
 | M3  | **Data intake**           | Google Sheets via Picker, CSV/Excel upload, column mapping, pre-flight checks (missing columns, empty cells, unreachable photos), photos from links / Drive / local folder | ⬜                                       |
 | M4  | **Generate and deliver**  | Batch run screen (progress, cancel, per-row report), ZIP download, export to Drive, merged print file                                                                      | ⬜                                       |
@@ -71,6 +82,18 @@ needs a domain and a privacy policy, so the paperwork should start during M2.
 | Engine orchestration: separate and merged output, progress, cancel, report | ✅                    |
 | Web Worker wrapper (comlink) and developer playground                      | ✅                    |
 | Dockerfile for Cloud Run                                                   | 🟡 written, not built |
+
+### V6 Phase 1 — Foundation & RBAC (session 2)
+
+| Item                                                                                         | Status |
+| -------------------------------------------------------------------------------------------- | ------ |
+| Role and record types (`UserRole`, institution, vault item)                                  | ✅     |
+| Custom-claims management with institution directory sync and session revocation              | ✅     |
+| Session cookies (`/api/auth/session`), server-side guards                                    | ✅     |
+| Route protection proxy for `/admin`, `/dashboard/institution`, `/dashboard/vault`, `/editor` | ✅     |
+| Firestore rules for institutions, templates, vault items                                     | ✅     |
+| `/login` page (Google Sign-In UI) — needs the Firebase web config (E2)                       | ⬜     |
+| Granting the first super admin on the real project (E6)                                      | ⬜     |
 
 ## 4. What is needed from the executive
 
@@ -156,19 +179,20 @@ milestone.
 
 ## 6. Risks and open questions
 
-| #   | Risk / question                                                                                  | Current position                                                                                                                               |
-| --- | ------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| R1  | **Indian-script rendering quality.** pdf-lib's own text drawing is wrong for several cases.      | Addressed by our own text drawing (ADR-007). Needs validation on real customer text in every launch language (E8).                             |
-| R2  | **Memory on low-end phones** for large batches or large photos.                                  | Engine streams files out one by one and can split merged output. B1 (photo shrinking) is the main remaining lever. Needs device testing (E11). |
-| R3  | **Limits enforced in the browser can be bypassed.**                                              | Tie paid value to server-side features (proxy quotas, verification pages, export). Decide with pricing (E12).                                  |
-| R4  | **Google OAuth verification** is slow and has requirements (domain, privacy policy, demo video). | Use the least-privileged scope (ADR-015); start paperwork early.                                                                               |
-| R5  | **Private photos in Google Drive** (Google Form uploads) are not reachable by the proxy.         | Plan: user picks them with Google Picker and the browser reads them with the user's own access. To be designed in M3 (E9).                     |
-| R6  | **pdf-lib is unmaintained.**                                                                     | Pinned and isolated (ADR-006). A maintained, compatible fork exists.                                                                           |
-| R7  | **Children's personal data** (DPDP Act): consent, retention, breach duties.                      | Architecture stores no recipient data on our servers. Legal review still needed (E15).                                                         |
-| R8  | **Encrypted or unusual template PDFs** cannot be opened.                                         | Rejected with a clear message. Measure how often it happens.                                                                                   |
-| R9  | **Proxy cost and abuse.**                                                                        | Authenticated only; limits on size and time. Rate limiting and quotas come with tiers (B23).                                                   |
-| Q1  | Should free-tier documents carry a watermark?                                                    | Open — pricing decision (E12).                                                                                                                 |
-| Q2  | Is a desktop-first power-user mode needed alongside mobile-first?                                | Open — depends on who the first customers are.                                                                                                 |
+| #   | Risk / question                                                                                  | Current position                                                                                                                                                        |
+| --- | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| R1  | **Indian-script rendering quality.** pdf-lib's own text drawing is wrong for several cases.      | Addressed by our own text drawing (ADR-007). Needs validation on real customer text in every launch language (E8).                                                      |
+| R2  | **Memory on low-end phones** for large batches or large photos.                                  | Engine streams files out one by one and can split merged output. B1 (photo shrinking) is the main remaining lever. Needs device testing (E11).                          |
+| R3  | **Limits enforced in the browser can be bypassed.**                                              | Tie paid value to server-side features (proxy quotas, verification pages, export). Decide with pricing (E12).                                                           |
+| R4  | **Google OAuth verification** is slow and has requirements (domain, privacy policy, demo video). | Use the least-privileged scope (ADR-015); start paperwork early.                                                                                                        |
+| R5  | **Private photos in Google Drive** (Google Form uploads) are not reachable by the proxy.         | Plan: user picks them with Google Picker and the browser reads them with the user's own access. To be designed in M3 (E9).                                              |
+| R6  | **pdf-lib is unmaintained.**                                                                     | Pinned and isolated (ADR-006). A maintained, compatible fork exists.                                                                                                    |
+| R7  | **Children's personal data** (DPDP Act): consent, retention, breach duties.                      | Architecture stores no recipient data on our servers. Legal review still needed (E15).                                                                                  |
+| R8  | **Encrypted or unusual template PDFs** cannot be opened.                                         | Rejected with a clear message. Measure how often it happens.                                                                                                            |
+| R9  | **Proxy cost and abuse.**                                                                        | Authenticated only; limits on size and time. Rate limiting and quotas come with tiers (B23).                                                                            |
+| Q3  | Should issuing a credential always spend institution credits?                                    | If yes, issuance must move to a server route that debits credits in a transaction, and browser writes to `vault_items` be closed (ADR-018). Needed before billing (M5). |
+| Q1  | Should free-tier documents carry a watermark?                                                    | Open — pricing decision (E12).                                                                                                                                          |
+| Q2  | Is a desktop-first power-user mode needed alongside mobile-first?                                | Open — depends on who the first customers are.                                                                                                                          |
 
 ## 7. How we work
 
