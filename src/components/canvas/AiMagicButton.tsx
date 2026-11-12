@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/dialog';
 import { AiError, enrichDataBatch } from '@/lib/ai/geminiClient';
 import { columnsOf, isValidColumnName } from '@/lib/ai/schema';
+import { notifyError } from '@/lib/ui/notify';
 import { cn } from '@/lib/utils/cn';
 import { useTemplateStore } from '@/store/templateStore';
 
@@ -136,6 +137,7 @@ export function AiMagicButton({ className, onEnriched }: AiMagicButtonProps) {
       });
       setTargetOverride(null);
     } catch (cause) {
+      if (!(cause instanceof AiError && cause.code === 'ABORTED')) notifyError(cause);
       setMessage(
         cause instanceof AiError && cause.code === 'ABORTED'
           ? { kind: 'error', text: 'Cancelled. Nothing was added.' }
