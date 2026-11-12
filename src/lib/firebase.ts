@@ -167,6 +167,18 @@ export async function endSession(): Promise<void> {
   await fetch('/api/auth/session', { method: 'DELETE' });
 }
 
+/**
+ * Full sign-out for the header's menu: ends any browser-side Firebase session, then clears the
+ * server's httpOnly session cookie (`DELETE /api/auth/session`). Throws when the cookie could not
+ * be cleared, because then the person is still signed in. The Firebase step is best effort: after
+ * sign-in the browser holds no Firebase session anyway (`establishSession`).
+ */
+export async function signOutEverywhere(config: FirebaseClientConfig | null): Promise<void> {
+  if (config) await signOut(clientAuth(config)).catch(() => undefined);
+  const response = await fetch('/api/auth/session', { method: 'DELETE' });
+  if (!response.ok) throw new Error('Sign-out could not be completed.');
+}
+
 /** Human message for a Firebase Auth error code. */
 export function authErrorMessage(error: unknown): string {
   const code = (error as { code?: string } | null)?.code ?? '';
