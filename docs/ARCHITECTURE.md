@@ -37,6 +37,7 @@ and Razorpay are **not wired yet** (milestones M1–M6).
 | `src/lib/auth/`, `src/proxy.ts`         | Claims management, sessions, route protection, server-side guards                             |
 | `src/app/api/auth/session/`             | Creates / clears the session cookie                                                           |
 | `firebase/`, `firebase.json`            | Firestore security rules and their emulator tests                                             |
+| `src/components/ui/`, `src/lib/utils/`  | Upload gateway (Phase 2): dropzone, crop and CSV preview modals, image and CSV helpers        |
 | `src/app/playground/`                   | Developer harness that runs the whole stack on a sample job                                   |
 | `tests/`, `scripts/`, `public/samples/` | Test support and fixtures, e2e script and asset generators, sample template and photos        |
 

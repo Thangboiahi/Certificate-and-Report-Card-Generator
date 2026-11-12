@@ -5,6 +5,24 @@ was verified, and what is left open. The line-by-line history is in git; this fi
 
 ---
 
+## 2026-11-12 — Session 4: Phase 2, universal uploader and image editor
+
+**Built.** `src/lib/utils/imageEditor.ts` (canvas crop, compression to ≤ 200 KB),
+`src/lib/utils/csv.ts` (PapaParse, header checks), `src/components/ui/dialog.tsx` (shadcn
+Dialog), `ImageCropModal`, `CsvPreviewModal`, `UniversalUploadZone`, a harness at
+`/playground/uploads`, `scripts/e2e-uploads.mjs`. Decisions in ADR-020.
+
+**Verified.** `scripts/e2e-uploads.mjs` in Chromium at 390×844 (touch) and 1280×900: 20/20
+checks — the crop modal fills a phone screen and is a centred dialog on desktop; a 3000×4000 noisy
+photo came out as a 173 KB, 976×1302 (exactly 3:4) JPEG; a CSV missing columns shows the red
+warning with a near-match hint and blocks Confirm; a valid CSV previews 5 rows and passes all 12;
+other file types are refused; no script errors. 435 unit tests pass; tsc, eslint, build clean.
+
+**Open.** Not yet wired into real screens. HEIC photos are not accepted. Not tested on a real
+phone (pinch zoom was not exercised; the slider and buttons were).
+
+---
+
 ## 2026-11-12 — Session 3: administrative update from the executive
 
 No code changes. Decisions recorded:

@@ -33,6 +33,7 @@ when to revisit it. This is the file to open when someone asks "why is it built 
 | 017 | Sessions: Firebase session cookies, verified in the proxy and again in server code     | Accepted |
 | 018 | Firestore rules model for institutions, templates and vault items                      | Accepted |
 | 019 | Security is tested against Firebase emulators; emulators can never be on in production | Accepted |
+| 020 | Upload gateway: shadcn/ui primitives copied in; compression on the main thread         | Accepted |
 
 ---
 
@@ -584,3 +585,24 @@ any production build unless `ALLOW_FIREBASE_EMULATOR=true` (local end-to-end tes
 
 **Limits.** The emulator always checks revocation and never checks signatures, so those two
 behaviours are verified only by Firebase's own guarantees and code review.
+
+---
+
+## ADR-020 — Upload gateway: shadcn/ui primitives copied in; compression on the main thread
+
+**Date:** 2026-11-12 · **Status:** Accepted
+
+**Decision.**
+
+- shadcn/ui is a copy-in component collection, not a package: `src/components/ui/dialog.tsx` is
+  its Dialog (Radix UI) adapted to be full-screen on phones, with `cn` in `src/lib/utils/cn.ts`.
+  No shadcn CLI or `components.json` yet; add them when more primitives are needed.
+- `browser-image-compression` runs with `useWebWorker: false`: its worker mode downloads the
+  library from a CDN at run time. The crop is already scaled to ≤ 1600 px, so compression on the
+  main thread is quick. If the result is still over 200 KB, dimensions shrink by 30 % per retry.
+- Photos are saved as JPEG (white behind transparency); PNGs stay PNG so logos and signatures
+  keep transparency.
+- The CSV gate blocks Confirm on missing required columns (exact match after trimming, with a
+  hint for case/spacing near-matches), on empty files, and above 2,500 rows (PLAN E11).
+- Uploads are limited to JPG, PNG and WebP images (20 MB before editing) and CSV (5 MB). HEIC
+  from iPhones is not accepted yet: Chromium cannot decode it.

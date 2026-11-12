@@ -58,10 +58,11 @@ phase's scope is recorded here when its brief arrives, never guessed in advance.
 
 Status key: ✅ done and verified · 🟡 in progress · ⬜ not started
 
-| Phase | Name              | Status         |
-| ----- | ----------------- | -------------- |
-| 1     | RBAC & Foundation | 🟡 **current** |
-| 2–9   | To be briefed     | ⬜             |
+| Phase | Name                              | Status                                 |
+| ----- | --------------------------------- | -------------------------------------- |
+| 1     | RBAC & Foundation                 | 🟡 (login page, super-admin seed open) |
+| 2     | Universal Uploader & Image Editor | ✅                                     |
+| 3–9   | To be briefed                     | ⬜                                     |
 
 ### Phase 1 — RBAC & Foundation (current)
 
@@ -75,6 +76,18 @@ Status key: ✅ done and verified · 🟡 in progress · ⬜ not started
 | Local Firebase emulator workflow with placeholder `.env.local` (no live project, no billing) | ✅     |
 | `/login` page (Google Sign-In UI) wired to the Auth emulator                                 | ⬜     |
 | Seeding the first super admin in the emulator                                                | ⬜     |
+
+### Phase 2 — Universal Uploader & Image Editor
+
+Every upload passes a client-side Preview ➔ Crop/Audit ➔ Confirm gateway.
+
+| Item                                                                                 | Status          |
+| ------------------------------------------------------------------------------------ | --------------- |
+| `imageEditor.ts`: canvas crop (`getCroppedImg`) + compression to ≤ 200 KB            | ✅              |
+| `ImageCropModal`: full-screen on phones, zoom slider and pinch, fixed aspect ratio   | ✅              |
+| `CsvPreviewModal`: first 5 rows, red warning and blocked confirm for missing columns | ✅              |
+| `UniversalUploadZone`: drop/tap, routes images and CSVs to the right modal           | ✅              |
+| Wiring into real screens (template upload, data intake)                              | ⬜ later phases |
 
 ### Foundation already built (before the phase plan)
 

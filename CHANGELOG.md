@@ -11,6 +11,7 @@ All notable changes. Newest first. Details and reasoning: `docs/DEVLOG.md`, `doc
 
 ### Added
 
+- Phase 2 upload gateway: `UniversalUploadZone`, `ImageCropModal` (crop + ≤ 200 KB compression), `CsvPreviewModal` (5-row preview, required-column check), shadcn Dialog.
 - V6 Phase 1, roles and access control: role types, custom-claims management, session cookies
   (`/api/auth/session`), route protection (`src/proxy.ts`) for `/admin`,
   `/dashboard/institution`, `/dashboard/vault` and `/editor`, server-side page guards, and
