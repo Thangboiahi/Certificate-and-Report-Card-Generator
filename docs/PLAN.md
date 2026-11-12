@@ -3,7 +3,7 @@
 The single place to see what we are building, where we are, what comes next, and what is waiting
 on a decision. Updated at the end of every working session.
 
-**Last updated:** 2026-11-12 (session 8 — Phase 6, audit logs and time-locked claims)
+**Last updated:** 2026-11-12 (session 9 — documentation restructure; Phase 7 in progress)
 
 Related records: [ARCHITECTURE.md](./ARCHITECTURE.md) (how it works) ·
 [DECISIONS.md](./DECISIONS.md) (why) · [DEVLOG.md](./DEVLOG.md) (history)
@@ -50,25 +50,35 @@ Phase 1 of V6 (roles, sessions, route protection, Firestore rules) is done — s
 | Documents  | Multi-page templates; placeholders of type text, image and QR; coordinates carry a page index   |
 | Images     | Fetched through a Next.js proxy route (CORS); drawn without distortion (cover / contain)        |
 
-## 3. Roadmap — 9-phase B2B2C architecture
+## 3. Roadmap — 9-phase V6 B2B2C architecture
 
-Set by the executive on 2026-11-12. It replaces the earlier M0–M7 milestone roadmap (kept in git
-history and DEVLOG session 1–2 entries). Phases are defined by the executive one at a time; a
-phase's scope is recorded here when its brief arrives, never guessed in advance.
+Set by the executive on 2026-11-12; it is the only roadmap. Each phase's scope is recorded here
+when its brief arrives, never guessed in advance. Live status: [STATE.md](./STATE.md).
 
 Status key: ✅ done and verified · 🟡 in progress · ⬜ not started
 
-| Phase | Name                                           | Status                                 |
-| ----- | ---------------------------------------------- | -------------------------------------- |
-| 1     | RBAC & Foundation                              | 🟡 (login page, super-admin seed open) |
-| 2     | Universal Uploader & Image Editor              | ✅                                     |
-| 3     | Core PDF Engine (Web Worker, ZIP, image proxy) | ✅                                     |
-| 4     | Canvas UI & Workspace Toggles                  | ✅ (real-phone check open)             |
-| 5     | CRM & Kanban Dashboards (dispatch)             | ✅ (live provider accounts open)       |
-| 6     | Audit Logs & Time-Locked Claims                | ✅ (claim page, scheduler open)        |
-| 7–9   | To be briefed                                  | ⬜                                     |
+| Phase | Name                                     | Status                               |
+| ----- | ---------------------------------------- | ------------------------------------ |
+| 1     | Foundation & RBAC                        | ✅ (`/login`, super-admin seed open) |
+| 2     | Universal Uploader & Image Editor        | ✅                                   |
+| 3     | Core PDF Engine (Web Worker, ZIP, proxy) | ✅                                   |
+| 4     | Canvas UI & Workspace Toggles            | ✅ (real-phone check open)           |
+| 5     | CRM & Kanban Dashboards, dispatch        | ✅ (live provider accounts open)     |
+| 6     | Audit Logs & Time-Locked Claims          | ✅ (scheduler job open)              |
+| 7     | Passwordless Claiming & The Vault        | 🟡                                   |
+| 8     | To be briefed                            | ⬜                                   |
+| 9     | AI Enrichment                            | ⬜ (scope to be briefed)             |
 
-### Phase 1 — RBAC & Foundation (two items open)
+### Phase 7 — Passwordless Claiming & The Vault (current)
+
+| Item                                                                                                              | Status |
+| ----------------------------------------------------------------------------------------------------------------- | ------ |
+| `lib/firebase.ts`: `sendSignInLinkToEmail` magic link and phone OTP sign-in                                       | 🟡     |
+| `app/claim/[token]/page.tsx`: sign in with the contact the link was sent to; fee → Razorpay; free → instant claim | 🟡     |
+| `components/vault/VaultDashboard.tsx`: grid of owned vault items, "Generate Public Link"                          | ⬜     |
+| Tests and end-to-end verification                                                                                 | ⬜     |
+
+### Phase 1 — Foundation & RBAC (two items open)
 
 | Item                                                                                         | Status |
 | -------------------------------------------------------------------------------------------- | ------ |
@@ -174,7 +184,7 @@ Available to every phase; verified in sessions 1–2:
 
 | #   | Item                                                                                                        | Needed when                    |
 | --- | ----------------------------------------------------------------------------------------------------------- | ------------------------------ |
-| P   | Briefs for Phases 7–9                                                                                       | Before each phase              |
+| P   | Briefs for Phases 8–9                                                                                       | Before each phase              |
 | E17 | Meta WhatsApp Business: verified business, sender number, approved Utility template (4 parameters, ADR-024) | Before real WhatsApp dispatch  |
 | E18 | Resend account with a verified sending domain and the sender address                                        | Before real email dispatch     |
 | E3  | Region — recommended **asia-south1 (Mumbai)**; Firestore's region is permanent                              | When a live project is created |
