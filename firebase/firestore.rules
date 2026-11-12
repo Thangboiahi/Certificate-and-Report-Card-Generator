@@ -1,0 +1,156 @@
+rules_version = '2';
+
+// V6 Firestore security rules.
+//
+// Contract shared with src/types/roles.ts — change both together:
+//   custom claims  role ('super_admin' | 'inst_admin' | 'inst_staff'), institutionId
+//   collections    institutions, templates, vault_items
+//
+// These rules govern browser access only. Server code using the Admin SDK bypasses them, which
+// is why credit balances and role changes are handled server-side.
+//
+// Anonymous (guest) sessions are never treated as accounts: they cannot read or write anything
+// here, whatever claims their token carries.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Who is asking ─────────────────────────────────────────────────────────────────────────
+
+    function hasAccount() {
+      return request.auth != null
+        && request.auth.token.firebase.sign_in_provider != 'anonymous';
+    }
+
+    function role() {
+      return hasAccount() ? request.auth.token.get('role', null) : null;
+    }
+
+    function isSuperAdmin() {
+      return role() == 'super_admin';
+    }
+
+    function hasInstitutionRole(instId, roles) {
+      return role() in roles && request.auth.token.get('institutionId', null) == instId;
+    }
+
+    function isInstitutionMember(instId) {
+      return hasInstitutionRole(instId, ['inst_admin', 'inst_staff']);
+    }
+
+    function isInstitutionAdmin(instId) {
+      return hasInstitutionRole(instId, ['inst_admin']);
+    }
+
+    // ── institutions/{instId} ─────────────────────────────────────────────────────────────────
+    // Readable by its own staff and admin; written only by super admins (and server code).
+
+    function validInstitution(d) {
+      return d.keys().hasAll(['name', 'adminUid', 'staffUids', 'creditBalance', 'verified'])
+        && d.keys().hasOnly(['name', 'adminUid', 'staffUids', 'creditBalance', 'verified'])
+        && d.name is string && d.name.size() > 0 && d.name.size() <= 200
+        && (d.adminUid == null || d.adminUid is string)
+        && d.staffUids is list
+        && d.creditBalance is int && d.creditBalance >= 0
+        && d.verified is bool;
+    }
+
+    match /institutions/{instId} {
+      allow read: if isSuperAdmin() || isInstitutionMember(instId);
+      allow create, update: if isSuperAdmin() && validInstitution(request.resource.data);
+      allow delete: if isSuperAdmin();
+    }
+
+    // ── templates/{templateId} ────────────────────────────────────────────────────────────────
+    // Personal template (institutionId == null): managed by its owner, a Micro-Issuer.
+    // Institution template: managed by that institution's admin; readable by its staff.
+    // Ownership fields are fixed at creation.
+
+    function canManageTemplate(d) {
+      return d.institutionId == null
+        ? hasAccount() && d.ownerUid == request.auth.uid
+        : isInstitutionAdmin(d.institutionId);
+    }
+
+    function validTemplate(d) {
+      return d.keys().hasAll(['ownerUid', 'institutionId', 'name', 'definition', 'createdAt', 'updatedAt'])
+        && d.keys().hasOnly(['ownerUid', 'institutionId', 'name', 'definition', 'createdAt', 'updatedAt'])
+        && d.ownerUid is string
+        && (d.institutionId == null || d.institutionId is string)
+        && d.name is string && d.name.size() <= 200
+        && d.definition is map
+        && d.updatedAt == request.time;
+    }
+
+    match /templates/{templateId} {
+      allow read: if isSuperAdmin()
+        || (hasAccount() && resource.data.ownerUid == request.auth.uid)
+        || (resource.data.institutionId != null && isInstitutionMember(resource.data.institutionId));
+
+      allow create: if canManageTemplate(request.resource.data)
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && validTemplate(request.resource.data);
+
+      allow update: if canManageTemplate(resource.data)
+        && request.resource.data.ownerUid == resource.data.ownerUid
+        && request.resource.data.institutionId == resource.data.institutionId
+        && request.resource.data.createdAt == resource.data.createdAt
+        && validTemplate(request.resource.data);
+
+      allow delete: if canManageTemplate(resource.data);
+    }
+
+    // ── vault_items/{itemId} ──────────────────────────────────────────────────────────────────
+    // Written by the issuer: a Micro-Issuer (issuerType 'individual', issuerId == their uid) or
+    // an institution's staff/admin (issuerType 'institution', issuerId == their institution).
+    // Read by the recipient (ownerUid) and by the issuer. Never deleted; revocation is one-way.
+
+    function isIssuer(d) {
+      return d.issuerType == 'individual'
+        ? hasAccount() && d.issuerId == request.auth.uid
+        : d.issuerType == 'institution' && isInstitutionMember(d.issuerId);
+    }
+
+    // The template must exist and belong to the same issuer.
+    function templateBelongsToIssuer(d) {
+      let template = get(/databases/$(database)/documents/templates/$(d.templateId)).data;
+      return d.issuerType == 'individual'
+        ? template.institutionId == null && template.ownerUid == d.issuerId
+        : template.institutionId == d.issuerId;
+    }
+
+    function validNewVaultItem(d) {
+      return d.keys().hasAll(['ownerUid', 'templateId', 'issuerId', 'issuerType', 'issuedAt', 'expiresAt', 'status', 'revokedAt'])
+        && d.keys().hasOnly(['ownerUid', 'templateId', 'issuerId', 'issuerType', 'issuedAt', 'expiresAt', 'status', 'revokedAt'])
+        && d.ownerUid is string && d.ownerUid.size() > 0 && d.ownerUid.size() <= 128
+        && d.templateId is string && d.templateId.size() > 0 && d.templateId.size() <= 128
+        && d.status == 'valid'
+        && d.issuedAt == request.time
+        && d.revokedAt == null
+        && (d.expiresAt == null || (d.expiresAt is timestamp && d.expiresAt > request.time))
+        && templateBelongsToIssuer(d);
+    }
+
+    function isRevocation() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'revokedAt'])
+        && resource.data.status == 'valid'
+        && request.resource.data.status == 'revoked'
+        && request.resource.data.revokedAt == request.time;
+    }
+
+    match /vault_items/{itemId} {
+      allow read: if isSuperAdmin()
+        || (hasAccount() && resource.data.ownerUid == request.auth.uid)
+        || isIssuer(resource.data);
+      allow create: if isIssuer(request.resource.data) && validNewVaultItem(request.resource.data);
+      allow update: if isIssuer(resource.data) && isRevocation();
+      allow delete: if false;
+    }
+
+    // ── Everything else ───────────────────────────────────────────────────────────────────────
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
