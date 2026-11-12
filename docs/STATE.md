@@ -4,6 +4,11 @@
 
 ## Current phase
 
+**FROZEN: cloud development is paused (2026-11-12) and the project is moving to a local desktop environment.** Do not
+continue in the cloud session. The mandatory usability fixes to do first once the local environment boots (logout/nav
+header, editor upload gateway, live Kanban data, Vault indexes and real data) are in `docs/LOCAL_TODO.md`. The Phase 10
+status below still stands.
+
 **Awaiting the Human Product Owner (session 19):** the `/login` smoke test passed (HTTP 200, form rendered, config read from
 the shell environment, see `docs/DEVLOG.md`). The next step is a manual email-link click-test to verify session minting
 (sign in with a real email link, confirm the session cookie is set and the role redirect works). Not yet done; nothing
