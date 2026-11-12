@@ -109,6 +109,8 @@ export interface ClaimFlowProps {
   signedIn: boolean;
   /** Whether the server can take payments at all (Razorpay keys and pricing configured). */
   paymentsReady: boolean;
+  /** True when the server uses Razorpay's test key: payments are not real. */
+  paymentsTestMode?: boolean;
   /** Price of the AI enrichment add-on, or `null` when it is not offered. */
   aiAddOnPaise: number | null;
 }
@@ -119,6 +121,7 @@ export function ClaimFlow({
   config,
   signedIn,
   paymentsReady,
+  paymentsTestMode = false,
   aiAddOnPaise,
 }: ClaimFlowProps) {
   const router = useRouter();
@@ -344,6 +347,15 @@ export function ClaimFlow({
             </dd>
           </div>
         </dl>
+        {paymentsTestMode && (
+          <p
+            role="note"
+            data-testid="test-mode"
+            className="rounded-xl bg-amber-50 p-3 text-xs text-amber-900 dark:bg-amber-950 dark:text-amber-100"
+          >
+            <strong>Test mode.</strong> No real money moves. Use Razorpay’s test payment details.
+          </p>
+        )}
         <p className="text-xs text-neutral-500">
           Pay securely with UPI, card or net banking. If the credential cannot be added to your
           vault, you are refunded automatically.

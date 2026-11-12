@@ -13,7 +13,7 @@ import { ClaimFlow } from '@/components/claim/ClaimFlow';
 import { getSessionUser } from '@/lib/auth/session';
 import { loadClaimView, type ClaimView } from '@/lib/claim/claim';
 import { pricingFromEnv, type PricingPolicy } from '@/lib/payments/pricing';
-import { razorpayConfigFromEnv } from '@/lib/razorpayClient';
+import { razorpayConfigFromEnv, razorpayMode } from '@/lib/razorpayClient';
 import { adminFirestore } from '@/lib/server/firebase-admin';
 import { firebaseClientConfig } from '@/lib/server/firebase-client-config';
 
@@ -90,6 +90,8 @@ async function Claim({ params }: { params: Promise<{ token: string }> }) {
   }
 
   const pricing = paymentPricing();
+  const razorpay = razorpayConfigFromEnv();
+  const paymentsTestMode = razorpay !== null && razorpayMode(razorpay.keyId) === 'test';
   return (
     <div className="flex flex-col gap-6">
       <header className="flex flex-col items-center gap-3 text-center">
@@ -116,6 +118,7 @@ async function Claim({ params }: { params: Promise<{ token: string }> }) {
         config={firebaseClientConfig()}
         signedIn={user !== null && user.role !== 'guest'}
         paymentsReady={pricing !== null}
+        paymentsTestMode={paymentsTestMode}
         aiAddOnPaise={pricing?.aiEnrichmentPaise ?? null}
       />
       <p className="flex items-center justify-center gap-1.5 text-xs text-neutral-500">

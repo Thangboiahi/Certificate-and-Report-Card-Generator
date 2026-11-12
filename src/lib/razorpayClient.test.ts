@@ -8,6 +8,7 @@ import {
   isRazorpayId,
   RazorpayApiError,
   razorpayConfigFromEnv,
+  razorpayMode,
   readPaymentEntity,
   verifyWebhookSignature,
 } from './razorpayClient';
@@ -42,6 +43,14 @@ const payment = (overrides: Record<string, unknown> = {}) => ({
   status: 'captured',
   amount_refunded: 0,
   ...overrides,
+});
+
+describe('razorpayMode', () => {
+  it('says test only for a test key', () => {
+    expect(razorpayMode('rzp_test_AbCdEf123456')).toBe('test');
+    expect(razorpayMode('rzp_live_AbCdEf123456')).toBe('live');
+    expect(razorpayMode('something-else')).toBe('live');
+  });
 });
 
 describe('razorpayConfigFromEnv', () => {
