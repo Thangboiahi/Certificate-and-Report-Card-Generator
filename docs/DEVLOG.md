@@ -5,6 +5,19 @@ was verified, and what is left open. The line-by-line history is in git; this fi
 
 ---
 
+## 2026-11-12 — Session 19: Phase 10 `/login` smoke test passed
+
+**Ran.** `npm run dev` (Next 16.4.6, ready in ~0.3s, `Environments: .env.local`), then `GET /login` → 200.
+**Result.** No `login-unavailable` marker and none of "Sign-in is not available yet" / "no sign-in configuration" in the body.
+The sign-in form rendered (email input present; Firebase config in the page points at `cardgen-dd.firebaseapp.com`).
+**Why it passes now.** `FIREBASE_WEB_API_KEY` and the project id are read from the process (shell) environment at request
+time by `src/lib/server/firebase-client-config.ts`; `.env.local` still lacks `FIREBASE_WEB_API_KEY`. Anyone running the app
+elsewhere (local checkout, Codespaces, Cloud Run) must set that variable there too. Dev server stopped afterwards.
+**Not verified.** A real email-link or SMS sign-in, session-cookie minting, role routing against live Firebase. No code changed.
+**Open.** Manual email-link click-test by the Human Product Owner (see `docs/STATE.md`).
+
+---
+
 ## 2026-11-12 — Session 18: Admin SDK explicit service account; `/login` config loads
 
 **Built.** `src/lib/server/firebase-admin.ts`: when `FIREBASE_CLIENT_EMAIL` and `FIREBASE_PRIVATE_KEY` are both set, the app

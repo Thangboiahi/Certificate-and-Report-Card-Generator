@@ -4,6 +4,11 @@
 
 ## Current phase
 
+**Awaiting the Human Product Owner (session 19):** the `/login` smoke test passed (HTTP 200, form rendered, config read from
+the shell environment, see `docs/DEVLOG.md`). The next step is a manual email-link click-test to verify session minting
+(sign in with a real email link, confirm the session cookie is set and the role redirect works). Not yet done; nothing
+further runs until the results come back.
+
 **Session 18: `/login` config now loads and the Admin SDK uses an explicit service account (ADR-031); ready for a manual click-test (real email link not yet tried).**
 
 Earlier, attempt 2 (session 17): Auth was NOT online in the agent session. `/login` still shows "not available yet": this
