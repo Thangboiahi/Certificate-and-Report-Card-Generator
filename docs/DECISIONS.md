@@ -947,3 +947,58 @@ KYC (E13, E19). Not yet exercised against Razorpay's test mode, in particular wh
 reverses a transfer created milliseconds earlier on capture. GST invoices for the platform fee and
 add-ons are not produced (E14). Refunds that keep failing stay `refundPending` and are logged as
 errors; there is no operator screen for them yet.
+
+---
+
+## ADR-029 — AI enrichment and Smart Audit: server-held Gemini key, strict JSON, allow-listed patches
+
+**Date:** 2026-11-12 · **Status:** Accepted (metering open, see below)
+
+**Context.** Phase 9 brief: a `geminiClient` with `enrichDataBatch(rows, prompt, targetCol)` and
+`processAiAuditCommand(command, currentState)`, a swipeable `SmartAuditCarousel` with an AI chat
+box, and an `AiMagicButton` for translations and remarks. Gemini outputs must be strict JSON so
+applying a patch can never crash the UI. The brief's `lib/…` / `components/…` paths map to `src/`.
+
+**Decision.**
+
+- **The key never reaches the browser.** `src/lib/ai/geminiClient.ts` (the brief's file) is the
+  browser-side API; it calls `POST /api/ai/enrich` and `POST /api/ai/audit` (`handler.ts`:
+  same-origin → JSON → signed-in non-guest → configured → zod-valid body). Gemini itself is called
+  only from `src/lib/ai/gemini.ts` (`server-only`) with `GEMINI_API_KEY`; no key = 503
+  `AI_NOT_CONFIGURED`. No `@google/genai` package: a ~150-line typed client over `fetch`, injectable
+  and mockable via `GEMINI_API_BASE_URL`, same reasoning as ADR-028 (no SDK in the server bundle).
+  `GEMINI_MODEL` defaults to `gemini-2.5-flash` (not verified against a live key).
+- **Strict JSON, three layers.** (1) Gemini is called with `responseMimeType: application/json` and
+  a `responseSchema`; truncated answers (`finishReason ≠ STOP`) are discarded unparsed. (2) The
+  text is parsed and validated with zod (`schema.ts`); one retry, then `BAD_MODEL_OUTPUT` (502).
+  (3) The browser validates the server's response again before anything touches the store.
+- **The patch is data, not code, and is allow-listed.** `AuditPatch` = `dataRows.transforms`
+  (rule per column: uppercase, lowercase, titlecase, trim, collapse_spaces — computed locally on
+  every row), `dataRows.cells` (single-cell fixes, only for rows the model was shown),
+  `placeholders` (text styling: textTransform, align, verticalAlign, #RRGGBB, fontSize 4–2000).
+  `applyAuditPatch` skips anything naming a missing column, row or placeholder, or a non-text
+  placeholder, reports what was skipped, never throws and never mutates. Bulk fixes therefore cost
+  one small request whatever the sheet size (2,500 rows are never sent for an audit).
+- **Enrichment** returns `{ i, value }` per row, matched back by index: skipped, repeated or invented
+  indexes are dropped, so a missing answer is blank, never shifted onto a neighbour. Batches of 40
+  rows, 2 in flight, cancellable. The new column cannot overwrite an existing one; names like
+  `__proto__` are refused.
+- **Data minimisation (DPDP).** Spreadsheet content is student data. Enrichment sends only the
+  columns the person ticks (translate sends exactly one); audit sends headers, ≤ 25 sample rows,
+  cells clipped to 300 chars. The UI says so before the first call. Cell content is wrapped as
+  untrusted `<data>` in the prompt and the model's output is bounded by the allow-lists above, so a
+  hostile cell cannot do more than propose an allow-listed edit that the person sees and can undo.
+- **Undo.** `templateStore.applyAiPatch` applies rows and styling in one update and returns the
+  report; the carousel keeps one snapshot and `restoreSnapshot` puts it back.
+- **Limits.** Prompt/command ≤ 500 chars, ≤ 40 rows and ≤ 40 columns per enrichment request, ≤ 25
+  sample rows per audit, ≤ 200 cell edits per patch.
+
+**Consequences / open.**
+
+- **Not metered.** Nothing is charged or rate-limited per call: access is sign-in only. Gemini spend
+  is therefore an open exposure for any signed-in user. Before launch decide the model (credits per
+  row like dispatch, ADR-024, or the Phase 8 "AI add-on") and add a per-user quota. Until then the
+  add-on stays off (`AI_ENRICHMENT_FEE_PAISE` unset) and the key should carry a Google-side budget cap.
+- Translations are only as good as the model; the template font must contain the script (ADR-007).
+- Not run against the real Gemini API (no key): the request shape follows Google's documented
+  `generateContent` structured-output format and is unit-tested against a mock.

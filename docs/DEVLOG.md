@@ -5,6 +5,41 @@ was verified, and what is left open. The line-by-line history is in git; this fi
 
 ---
 
+## 2026-11-12 — Session 12: Phase 9, AI enrichment and Smart Audit
+
+**Built.** `src/lib/ai/`: `schema.ts` (limits, zod schemas, `AuditPatch`, `buildAuditContext`,
+`applyAuditPatch`), `gemini.ts` (server-only `fetch` client: JSON mode + `responseSchema`, validated,
+one retry), `handler.ts` + `POST /api/ai/enrich` and `/api/ai/audit` (same-origin, signed-in, 503
+without `GEMINI_API_KEY`), `geminiClient.ts` (the brief's file: `enrichDataBatch`,
+`processAiAuditCommand`, browser side). `SmartAuditCarousel` (swipe / keys / buttons, issue flags,
+chat commands, undo, follows the editor's row switcher) and `AiMagicButton` (translate, remarks,
+custom; choose which columns are sent) in `src/components/canvas/`, mounted under the canvas on
+`/editor`. `templateStore.applyAiPatch` / `restoreSnapshot`. ADR-029.
+
+**Decided.** The brief's `lib/ai/geminiClient.ts` could not hold the key and run in the browser, so it
+is the browser API and Gemini is called from the server. Audit commands return rules (title-case
+column X), not 2,500 rewritten rows. Nothing the model returns is applied unless it matches a real
+row, column or text placeholder.
+
+**Verified.** `npm run verify` (format, lint, typecheck, 567 tests, build); 23 new unit tests with a
+mocked Gemini (request shape, key in header not URL, retry, truncation, hostile and malformed
+output, index alignment, clipping, patch application and immutability, store undo, client batching
+and error mapping); `node scripts/e2e-ai.mjs` all checks on a 412 px phone profile: real routes
+refuse anonymous and cross-origin callers, AI Magic adds a column and sends one column only, swipe,
+arrows and the editor's row switcher stay in sync, a chat command applies a patch, skips an
+impossible op and can be undone, server error and malformed patch shown without breaking the page;
+`node scripts/e2e-editor.mjs` still passes.
+
+**Not verified / open.** Never run against the real Gemini API (no key; model id
+`gemini-2.5-flash` and the request shape follow Google's documentation, not a live call). The routes'
+happy path with a real session was not run (the e2e stubs `/api/ai/*`); the 401/403 paths were.
+**Use is not metered**: any signed-in user can spend our Gemini quota (ADR-029) — decide pricing and
+add a quota before turning it on (PLAN E20). Translation quality in Indian scripts, and a template
+font that has those glyphs, were not assessed. The carousel is not yet wired to dispatch/generate
+(`onConfirm` is a prop; the editor shows it without a confirm button).
+
+---
+
 ## 2026-11-12 — Session 11: Phase 7 completed (the vault)
 
 **Found.** Most of Phase 7 was already on disk from the interrupted session: `src/lib/firebase.ts`

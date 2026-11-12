@@ -12,6 +12,7 @@
  */
 import { create } from 'zustand';
 
+import { applyAuditPatch, type ApplyReport, type AuditPatch } from '@/lib/ai/schema';
 import { clampBoxPosition, percentToPoints, roundPoints } from '@/lib/editor/coordinates';
 import {
   TEMPLATE_LIMITS,
@@ -49,6 +50,16 @@ export interface TemplateStoreState {
    * the minimum follows it down (the schema requires `minFontSize ≤ fontSize`).
    */
   setFontSize(id: string, fontSize: Points): void;
+  /**
+   * Applies a validated AI patch (`src/lib/ai/schema.ts`) to the rows and to text styling in one
+   * update. Operations that do not match the real state are skipped and listed in the report.
+   */
+  applyAiPatch(patch: AuditPatch): ApplyReport;
+  /** Puts back rows and template captured before `applyAiPatch` (undo). */
+  restoreSnapshot(snapshot: {
+    dataRows: DataRow[];
+    activeTemplate: TemplateDefinition | null;
+  }): void;
   /** Forgets the template, selection and rows. */
   reset(): void;
 }
@@ -157,6 +168,19 @@ export const useTemplateStore = create<TemplateStoreState>()((set, get) => ({
       };
     });
     if (update) set(update);
+  },
+
+  applyAiPatch(patch) {
+    const { dataRows, activeTemplate } = get();
+    const result = applyAuditPatch({ dataRows, template: activeTemplate }, patch);
+    if (result.dataRows !== dataRows || result.template !== activeTemplate) {
+      set({ dataRows: result.dataRows, activeTemplate: result.template });
+    }
+    return result.report;
+  },
+
+  restoreSnapshot(snapshot) {
+    set({ dataRows: snapshot.dataRows, activeTemplate: snapshot.activeTemplate });
   },
 
   reset() {

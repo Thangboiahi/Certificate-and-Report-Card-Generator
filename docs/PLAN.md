@@ -57,17 +57,17 @@ when its brief arrives, never guessed in advance. Live status: [STATE.md](./STAT
 
 Status key: ✅ done and verified · 🟡 in progress · ⬜ not started
 
-| Phase | Name                                     | Status                               |
-| ----- | ---------------------------------------- | ------------------------------------ |
-| 1     | Foundation & RBAC                        | ✅ (`/login`, super-admin seed open) |
-| 2     | Universal Uploader & Image Editor        | ✅                                   |
-| 3     | Core PDF Engine (Web Worker, ZIP, proxy) | ✅                                   |
-| 4     | Canvas UI & Workspace Toggles            | ✅ (real-phone check open)           |
-| 5     | CRM & Kanban Dashboards, dispatch        | ✅ (live provider accounts open)     |
-| 6     | Audit Logs & Time-Locked Claims          | ✅ (scheduler job open)              |
-| 7     | Passwordless Claiming & The Vault        | 🟡                                   |
-| 8     | Escrow Payment Engine (Razorpay Route)   | ✅ (mock-verified; test keys E13)    |
-| 9     | AI Enrichment                            | ⬜ (scope to be briefed)             |
+| Phase | Name                                     | Status                                 |
+| ----- | ---------------------------------------- | -------------------------------------- |
+| 1     | Foundation & RBAC                        | ✅ (`/login`, super-admin seed open)   |
+| 2     | Universal Uploader & Image Editor        | ✅                                     |
+| 3     | Core PDF Engine (Web Worker, ZIP, proxy) | ✅                                     |
+| 4     | Canvas UI & Workspace Toggles            | ✅ (real-phone check open)             |
+| 5     | CRM & Kanban Dashboards, dispatch        | ✅ (live provider accounts open)       |
+| 6     | Audit Logs & Time-Locked Claims          | ✅ (scheduler job open)                |
+| 7     | Passwordless Claiming & The Vault        | 🟡                                     |
+| 8     | Escrow Payment Engine (Razorpay Route)   | ✅ (mock-verified; test keys E13)      |
+| 9     | AI Enrichment & Smart Audit              | 🟡 (built; needs Gemini key, metering) |
 
 ### Phase 8 — Escrow Payment Engine (Razorpay Route)
 
@@ -215,6 +215,7 @@ Available to every phase; verified in sessions 1–2:
 | E12 | Pricing: tiers and what each includes                                                                        | Billing phase                   |
 | E13 | Razorpay account (KYC complete): test keys first, **Route enabled**, a webhook secret for `payment.captured` | Before real paid claims         |
 | E19 | Each institution that charges claim fees onboarded as a Razorpay Route Linked Account (`acc_…`, their KYC)   | Before that institution charges |
+| E20 | Google Gemini API key (with a budget cap) for `GEMINI_API_KEY`; decision on how AI use is charged (ADR-029)  | Before AI goes live             |
 | E14 | Business details for GST invoices                                                                            | Billing phase                   |
 | E15 | Privacy policy and terms, incl. children's data (DPDP Act)                                                   | Before launch                   |
 | E16 | Support email and logo                                                                                       | Before launch                   |

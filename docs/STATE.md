@@ -1,10 +1,11 @@
 # State
 
-**Updated:** 2026-11-12 (session 11) · **Branch:** `ccr-23292c99-dwsyq6`
+**Updated:** 2026-11-12 (session 12) · **Branch:** `ccr-23292c99-dwsyq6`
 
 ## Current phase
 
-Phase 9 — **awaiting the brief** (the AI add-on is already sold at checkout but not fulfilled).
+Phase 9 — AI Enrichment & Smart Audit: **built** (ADR-029), verified with a mocked Gemini; needs a
+Gemini key (E20) and a metering decision before it goes live. The checkout's AI add-on is still off.
 Phase 7 — Passwordless Claiming & The Vault: **complete** (vault dashboard, share page, index).
 Phase 8 — Escrow Payment Engine: complete, verified against a mock of Razorpay (ADR-028).
 
@@ -14,12 +15,19 @@ Phase 8 — Escrow Payment Engine: complete, verified against a mock of Razorpay
 
 ## Next immediate task
 
-Wait for the Phase 9 brief. Small gaps carried over from Phase 7 (not blocking):
+Get a Gemini key and decide how AI use is charged (E20), then wire `SmartAuditCarousel`'s
+`onConfirm` to dispatch/generate. Small gaps carried over from Phase 7 (not blocking):
 
 - `/login` page: the proxy redirects signed-out visitors to `/login?next=…`, which does not exist
   yet (the claim page has its own sign-in). `PasswordlessSignIn` can be reused.
 - `scripts/e2e-claim.mjs`: email-link and phone-OTP sign-in in the browser. The e2e scripts create
   verified accounts directly, so the sign-in UI is unit/emulator-tested only, never clicked through.
+
+### Phase 9 on disk (verified: 567 unit, `scripts/e2e-ai.mjs`)
+
+- `src/lib/ai/{schema,gemini,handler,geminiClient}.ts`, `POST /api/ai/{enrich,audit}`.
+- `src/components/canvas/{SmartAuditCarousel,AiMagicButton}.tsx`, mounted on `/editor`.
+- Not run against real Gemini; unmetered (see ADR-029).
 
 ### Phase 7 on disk (verified: 544 unit, 70 emulator, 10/10 `scripts/e2e-vault.mjs`)
 
@@ -41,5 +49,5 @@ Wait for the Phase 9 brief. Small gaps carried over from Phase 7 (not blocking):
 
 ## Needed from the executive
 
-E13 Razorpay keys + Route · E19 Linked Account onboarding · E17 Meta WhatsApp · E18 Resend domain
+E20 Gemini key + AI pricing · E13 Razorpay keys + Route · E19 Linked Account onboarding · E17 Meta WhatsApp · E18 Resend domain
 · Q4–Q9 (see `PLAN.md`; Q8 = platform fee / AI add-on price / escrow hold).

@@ -259,6 +259,26 @@ settleCapturedPayment (one transaction) ◄────────────�
 - `claim_orders` is server-only in the rules; the composite index (status, createdAt) is in
   `firebase/firestore.indexes.json`. ADR-028.
 
+## AI tools (Phase 9)
+
+Two things happen to a sheet before documents are generated, both through Gemini and both on the
+editor screen (`/editor`): **AI Magic** adds a column (translation, remark, custom) and **Smart Audit**
+reviews the rows and applies bulk fixes written in plain language. ADR-029.
+
+    browser                                   server                              Google
+    AiMagicButton ─┐                          POST /api/ai/enrich ─┐
+    SmartAuditCarousel ─ geminiClient.ts ───► POST /api/ai/audit  ─┴ handler.ts ─► gemini.ts ─► Gemini
+          │            (validates answers)     same-origin, session, zod            (key, JSON mode, retry)
+          ▼
+    templateStore.applyAiPatch ◄── AuditPatch (schema.ts: allow-listed, applied to the real state)
+
+- `src/lib/ai/schema.ts` — pure and shared: limits, zod schemas, `AuditPatch`, `buildAuditContext`
+  (what the model sees), `applyAuditPatch` (what it may change), `filterPatchToContext`.
+- The patch holds column rules (`uppercase`, `lowercase`, `titlecase`, `trim`, `collapse_spaces`),
+  single-cell fixes for sampled rows, and text-styling changes. It is never code and never trusted:
+  unknown rows, columns and placeholders are skipped and reported.
+- `AI_NOT_CONFIGURED` (503) until `GEMINI_API_KEY` is set. Use is not metered yet.
+
 ## CRM board (Phase 5)
 
 `KanbanBoard` (`@hello-pangea/dnd`) shows credential requests in four stages; state logic in
@@ -289,10 +309,12 @@ Cloud Run notes for when it is deployed:
 
 ## Testing
 
-- `npm test` — 544 unit/integration tests (Node). Engine tests render PDFs with poppler
+- `npm test` — 567 unit/integration tests (Node). Engine tests render PDFs with poppler
   (`pdftoppm`/`pdftotext`) and assert on pixels and word positions; they skip without poppler.
 - `tests/showcase.test.ts` writes pictures to `tests/output/` for visual review.
 - `node scripts/e2e-playground.mjs` (after `npm run build`) — production server + Chromium.
+- `node scripts/e2e-ai.mjs` (after `npm run build`) — AI Magic and the Smart Audit carousel in
+  Chromium with `/api/ai/*` stubbed; also checks the real routes refuse anonymous and cross-origin callers.
 - `npm run test:emulator` — 70 tests against the Firebase Auth + Firestore emulators (claims,
   sessions, proxy, rules, dispatch, the escrow engine).
 - `firebase emulators:exec --only auth,firestore --project demo-v6 'node scripts/e2e-auth.mjs'`

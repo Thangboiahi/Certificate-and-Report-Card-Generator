@@ -4,6 +4,9 @@ Newest first. Per-change detail: git history and the repository-root `CHANGELOG.
 
 ## Completed
 
+- **Phase 9 — AI Enrichment & Smart Audit:** `src/lib/ai/*`, `/api/ai/enrich`, `/api/ai/audit`,
+  `SmartAuditCarousel`, `AiMagicButton` (ADR-029). Verified with mocked Gemini and a stubbed UI run;
+  **not** run against the real Gemini API; per-user metering open.
 - **Phase 7 — Passwordless Claiming & The Vault:** email-link and phone-OTP sign-in
   (`src/lib/firebase.ts`), public claim page `/claim/[token]` (free claim, or the Phase 8
   checkout), `VaultDashboard` grid with "Generate Public Link", public verification page

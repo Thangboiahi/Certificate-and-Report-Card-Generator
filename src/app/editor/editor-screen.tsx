@@ -11,8 +11,10 @@ import { ChevronLeft, ChevronRight, FileDown, LoaderCircle } from 'lucide-react'
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 
+import { AiMagicButton } from '@/components/canvas/AiMagicButton';
 import { MobileEditor } from '@/components/canvas/MobileEditor';
 import { PropertyBar } from '@/components/canvas/PropertyBar';
+import { SmartAuditCarousel } from '@/components/canvas/SmartAuditCarousel';
 import { createPdfEngineClient, saveBlob, type PdfEngineClient } from '@/lib/pdfEngine';
 import { cn } from '@/lib/utils/cn';
 import { useTemplateStore } from '@/store/templateStore';
@@ -37,6 +39,7 @@ export function EditorScreen() {
   const hasSelection = useTemplateStore((state) => state.selectedPlaceholderId !== null);
   const [rowIndex, setRowIndex] = useState(0);
   const [exporting, setExporting] = useState(false);
+  const [reviewing, setReviewing] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const engine = useRef<PdfEngineClient | null>(null);
 
@@ -170,6 +173,22 @@ export function EditorScreen() {
           previewRowIndex={rowIndex}
         />
       </div>
+      <section aria-label="Data" className="mx-auto flex max-w-3xl flex-col gap-3 px-3 pb-6">
+        <div className="flex flex-wrap gap-2">
+          <AiMagicButton />
+          <button
+            type="button"
+            aria-expanded={reviewing}
+            onClick={() => setReviewing((open) => !open)}
+            disabled={rowCount === 0}
+            data-testid="review-data"
+            className="inline-flex min-h-11 items-center rounded-xl border border-neutral-300 px-4 text-sm hover:border-neutral-500 disabled:opacity-50 dark:border-neutral-700"
+          >
+            {reviewing ? 'Hide data review' : 'Review data'}
+          </button>
+        </div>
+        {reviewing && <SmartAuditCarousel row={rowIndex} onRowChange={setRowIndex} />}
+      </section>
       <PropertyBar />
     </div>
   );
