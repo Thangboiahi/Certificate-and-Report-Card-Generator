@@ -1120,3 +1120,37 @@ cards hold recipients' names and contacts.
 `vault_items` index (`ownerUid` + `issuedAt`) is declared in `firestore.indexes.json` but still has to be built in the live
 project (the alert links to it). Requests are created by hand with "Add request"; there is no recipient-facing way to ask for a
 credential yet, and moving a card to Issued does not issue anything (the issue flow stays in the editor and dispatch).
+
+---
+
+## ADR-034 — Public pages: `/verify/{shareId}` is the verification portal (not the Firestore document id); LinkedIn link built in the browser; no prices until decided
+
+**Status:** accepted · 2026-11-12 (Phase 13).
+
+**Context.** Phase 13 asked for a public homepage and a verification page at `/verify/[id]` that "securely queries Firestore for the
+given credential ID" without a login. A page already existed at `/v/{shareId}` (ADR-027).
+
+**Decision.**
+
+- **The id in the URL is the share id, not the document id.** Looking a credential up by its Firestore document id would show
+  anyone who learns or guesses an id the recipient's name and credential, even if the owner never chose to share it, and would
+  overturn ADR-027 (the owner switches public sharing on and off). So `/verify/{id}` resolves the 256-bit `shareId` only
+  (`findSharedCredential`); an unknown id, a document id and a credential whose owner stopped sharing all look the same. The page is
+  `noindex` with `referrer: no-referrer`, because the id is a capability.
+- **`/v/{shareId}` stays as a permanent redirect** to `/verify/{shareId}`, so links already shared keep working. New links
+  (vault "Generate Public Link", claim responses) use `/verify/`.
+- **Verdicts** (`src/lib/vault/verification.ts`): revoked beats expired beats valid. Valid: green "Verified", issuer, recipient, issue
+  date, a certificate-style preview and the LinkedIn button. Revoked: red `role="alert"` "INVALID / REVOKED" telling the visitor to contact
+  the issuer, with a stamp on the preview and no LinkedIn button. Expired: amber alert, no LinkedIn button.
+- **The preview is drawn from the issuer's record, not the issued PDF.** The platform generates PDFs in the browser and does not keep
+  them, so there is no file to show. The preview says what the record says.
+- **QR codes.** The engine's QR placeholder encodes whatever the template says; the share id does not exist until a recipient claims and
+  shares, so a QR printed at generation time cannot yet point at `/verify/{shareId}`. Open item (needs a decision on pre-minted ids).
+- **LinkedIn** (`src/lib/linkedin.ts`): the standard Add-to-Profile URL (`startTask=CERTIFICATION_NAME`, `name`, `organizationName`,
+  `issueYear`, `issueMonth`, optional expiry, `certUrl`). `certUrl` is the page's own address, read in the browser when the button is
+  pressed, so it is right on any domain. Month and year are in India time. Not sent anywhere by us.
+- **Homepage** (`src/app/page.tsx`): static server page, calls to action to `/login` (institutions) and `/editor` (no sign-in). **No
+  prices are shown**, because pricing is undecided (PLAN E12); plans are described by who they are for.
+
+**Consequences.** A holder who never turned sharing on has nothing to verify at a public address. The homepage copy describes
+WhatsApp/email delivery and AI clean-up as features; both need provider keys (E17, E18, E20) before they work in production.

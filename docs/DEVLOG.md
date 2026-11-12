@@ -5,6 +5,33 @@ was verified, and what is left open. The line-by-line history is in git; this fi
 
 ---
 
+## 2026-11-12 — Session 22: Phase 13, public homepage and verification portal
+
+**Built.** (ADR-034)
+
+- Homepage `src/app/page.tsx` replaces the milestone placeholder: hero "Issue Verifiable Credentials in Seconds", how it works, features,
+  plans by audience (no prices), calls to action to `/login` and `/editor`.
+- `/verify/[id]` (moved from `/v/[shareId]`): `VerificationResult` with Verified / INVALID / REVOKED / EXPIRED verdicts, metadata and a certificate
+  preview; `verificationState` in `src/lib/vault/verification.ts`; `AddToLinkedIn` with `linkedInAddUrl` in `src/lib/linkedin.ts`. `/v/{id}`
+  permanently redirects. Share links from the vault and the claim route now use `/verify/`.
+- Dashboard layout no longer logs an error while the static shell is built (it was caught `cookies()` rejecting during prerender).
+- `scripts/e2e-vault.mjs` updated: new path, "Verified" text, Add-to-LinkedIn present, old `/v/` link redirects.
+
+**Deviation.** The directive said to query Firestore "for the given credential ID". That would mean the document id; I used the share id
+instead, so a credential is reachable only if its owner turned sharing on (ADR-027). Documented in ADR-034.
+
+**Verified.** `npm run typecheck`, `npm run lint`, `npm test` (577 passed, 39 skipped as before), `npm run build`. A production build served against the Auth and
+Firestore emulators, with four seeded credentials (valid, revoked, expired, not shared), in a signed-out browser: valid shows "Verified", metadata,
+preview and the LinkedIn button; revoked shows the red INVALID / REVOKED alert and no button; expired shows the amber alert and no button; an unknown id,
+a garbage id and the Firestore document ids of a shared and an unshared item all show "We couldn't verify this credential"; `/v/{id}` lands on `/verify/{id}`;
+the LinkedIn button opens `linkedin.com/profile/add` with startTask, name, organizationName, issueYear, issueMonth and a certUrl that is the page's own address;
+the homepage has no horizontal scroll at 375 px and its calls to action point at `/login` and `/editor`.
+**Not verified.** What LinkedIn does with the link (we checked the URL only); `scripts/e2e-vault.mjs` (not run); anything on the live project.
+**Open.** Prices (E12). A QR printed at generation time cannot encode `/verify/{shareId}` because the share id is minted later: decide on pre-minted verification ids.
+The revoked stamp sits over the credential name; fine for now. Contact details for issuers are not stored, so the page says "contact" the issuer by name only.
+
+---
+
 ## 2026-11-12 — Session 21: Phase 12, live Kanban and Vault wiring
 
 **Built.** (ADR-033)

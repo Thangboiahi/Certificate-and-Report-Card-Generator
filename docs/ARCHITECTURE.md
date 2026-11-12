@@ -200,6 +200,13 @@ MobileEditor ── per page: <div aspect-ratio=w/h, container-type=inline-size>
 - Failures surface as toasts: `Toaster` and `GlobalErrorToasts` in the root layout, `notifyError` (`src/lib/ui/notify.ts`) in
   components, `src/app/error.tsx` for render errors.
 
+## Public pages (Phase 13)
+
+- `/` (`src/app/page.tsx`): static marketing page; calls to action to `/login` and `/editor`. No prices (ADR-034).
+- `/verify/{shareId}`: the public verification portal, no sign-in. `findSharedCredential` (Admin SDK) looks up the unguessable share id;
+  `verificationState` picks valid, expired or revoked; `VerificationResult` renders the verdict, metadata and a preview; `AddToLinkedIn`
+  opens the Add-to-Profile URL from `src/lib/linkedin.ts`. `/v/{shareId}` redirects here.
+
 ## Workspaces
 
 `src/app/dashboard/(workspace)/layout.tsx` wraps `/dashboard/vault` and `/dashboard/issue` in

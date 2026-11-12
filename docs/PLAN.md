@@ -3,7 +3,7 @@
 The single place to see what we are building, where we are, what comes next, and what is waiting
 on a decision. Updated at the end of every working session.
 
-**Last updated:** 2026-11-12 (session 21 — Phase 12 live Kanban and Vault wiring built; live index build and e2e run open)
+**Last updated:** 2026-11-12 (session 22 — Phase 13 public pages built; session 21 — Phase 12 live Kanban and Vault wiring built; live index build and e2e run open)
 
 Related records: [ARCHITECTURE.md](./ARCHITECTURE.md) (how it works) ·
 [DECISIONS.md](./DECISIONS.md) (why) · [DEVLOG.md](./DEVLOG.md) (history)
@@ -71,6 +71,7 @@ Status key: ✅ done and verified · 🟡 in progress · ⬜ not started
 | 10    | Live API Key Injection & Production Deploy | ⬜ (ready to start; needs E13, E17, E18, E20) |
 | 11    | Global App Shell & State Cleanup (local)   | ✅ (sign-out e2e and live-session check open) |
 | 12    | Dashboard Live Wiring & Vault (local)      | 🟡 (built, emulator-verified; live index and e2e run open) |
+| 13    | Public-Facing Architecture (local)         | 🟡 (built, browser-verified; prices need E12, QR ids open) |
 
 ### Phase 8 — Escrow Payment Engine (Razorpay Route)
 
@@ -97,7 +98,7 @@ Pay-to-claim checkout with revenue splitting. Decision in ADR-028.
 | `lib/firebase.ts`: `sendSignInLinkToEmail` magic link and phone OTP sign-in                                         | ✅     |
 | `app/claim/[token]/page.tsx`: sign in with the contact the link was sent to; fee → checkout (Phase 8); free → claim | ✅     |
 | `components/vault/VaultDashboard.tsx`: grid of owned vault items, "Generate Public Link"                            | ✅     |
-| Public verification page `/v/[shareId]`; `ownerUid + issuedAt` index                                                | ✅     |
+| Public verification page `/verify/[id]` (was `/v/[shareId]`); `ownerUid + issuedAt` index                                               | ✅     |
 | Vault end to end in Chromium (`scripts/e2e-vault.mjs`, 10 checks)                                                   | ✅     |
 | `/login` page (email link / SMS, redirect by role; B-001)                                                           | ✅     |
 | Email-link / phone-OTP sign-in driven in a browser with real providers (`scripts/e2e-claim.mjs`)                    | ⬜     |

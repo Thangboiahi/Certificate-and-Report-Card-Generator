@@ -1,8 +1,18 @@
 # State
 
-**Updated:** 2026-11-12 (session 21, Phase 12) · **Branch:** `claude/global-app-shell-state-f72bd1`
+**Updated:** 2026-11-12 (session 22, Phase 13) · **Branch:** `claude/global-app-shell-state-f72bd1`
 
 ## Current phase
+
+**Phase 13 (Public-Facing Architecture): BUILT** (2026-11-12, ADR-034). The homepage `/` is a responsive marketing page with calls to action to
+`/login` and `/editor`. `/verify/{id}` is the public verification portal: green "Verified" with issuer, recipient, issue date and a
+certificate preview; red "INVALID / REVOKED" (contact the issuer); amber "EXPIRED"; and "Add to LinkedIn profile" on valid ones only.
+`{id}` is the unguessable **share id**, not the Firestore document id (that would expose credentials their owners never shared); `/v/{id}`
+redirects. Verified against the emulators with a production build and a signed-out browser: all four states, document ids not resolving,
+the old link redirecting, the LinkedIn URL's parameters, and the homepage on desktop and a 375 px phone. Unit tests: 577. Not verified: the
+LinkedIn page itself (we only checked the URL we open), `scripts/e2e-vault.mjs` (updated, not run: no Playwright here), anything against the live
+project. Open: the homepage shows no prices (PLAN E12); QR codes printed at generation time cannot point at `/verify` yet (the share id
+does not exist until a recipient claims). Phase 12 (live Kanban and Vault) remains BUILT, with its live index still to build.
 
 **Phase 12 (Dashboard Live Wiring & Vault): BUILT** (2026-11-12, ADR-033). The Kanban reads and writes Firestore
 (`credential_requests`, server-only) through `/api/requests`, with no sample data left; the vault shows real `vault_items`; a missing
@@ -76,7 +86,7 @@ against it. Known small gaps, none blocking:
 ### Phase 7 on disk (verified: 544 unit, 70 emulator, 10/10 `scripts/e2e-vault.mjs`)
 
 - `src/lib/firebase.ts`, `src/components/auth/PasswordlessSignIn.tsx`, `/claim/[token]` + `ClaimFlow`.
-- `src/components/vault/VaultDashboard.tsx` on `/dashboard/vault`; `/v/[shareId]`; `POST /api/vault/share`.
+- `src/components/vault/VaultDashboard.tsx` on `/dashboard/vault`; `/verify/[id]` (`/v/[shareId]` redirects); `POST /api/vault/share`.
 
 ### Phase 8 on disk (verified: 544 unit, 70 emulator, 52/52 `scripts/e2e-checkout.mjs`)
 
