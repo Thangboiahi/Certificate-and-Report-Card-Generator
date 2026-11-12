@@ -24,6 +24,8 @@
  * Keep `schema.ts` (runtime validation) in sync — the compiler enforces it.
  */
 
+import type { TimestampLike } from '@/types/roles';
+
 /** Current version of the persisted template shape. */
 export const TEMPLATE_SCHEMA_VERSION = 1 as const;
 
@@ -342,14 +344,26 @@ export interface TemplateDefinition {
   output: OutputSettings;
 }
 
-/** A template as stored in Firestore: the definition plus ownership and audit fields. */
+/**
+ * A template as stored in Firestore at `templates/{id}`: the definition plus ownership and audit
+ * fields. Ownership decides who may change it (see `firebase/firestore.rules`):
+ *   - personal template (`institutionId: null`): its owner, a Micro-Issuer;
+ *   - institution template: that institution's admin. `ownerUid` records who created it.
+ * `ownerUid` and `institutionId` never change after creation.
+ */
 export interface TemplateRecord {
+  /** The document id. Not stored inside the document. */
   id: string;
-  /** Firebase Auth uid of the owner. */
-  ownerId: string;
+  /** Firebase Auth uid of the creator. */
+  ownerUid: string;
+  /** The owning institution, or `null` for a personal template. */
+  institutionId: string | null;
   name: string;
-  /** Milliseconds since the Unix epoch. */
-  createdAt: number;
-  updatedAt: number;
+  /** Server time of creation (set with a server timestamp). */
+  createdAt: TimestampLike;
+  /** Server time of the last change (set with a server timestamp). */
+  updatedAt: TimestampLike;
   definition: TemplateDefinition;
 }
+
+export type TemplateRecordDocument = Omit<TemplateRecord, 'id'>;
