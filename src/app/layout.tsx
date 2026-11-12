@@ -1,5 +1,8 @@
 import type { Metadata, Viewport } from 'next';
 
+import { GlobalErrorToasts } from '@/components/GlobalErrorToasts';
+import { Toaster } from '@/components/ui/sonner';
+
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -22,6 +25,8 @@ export default function RootLayout({ children }: LayoutProps<'/'>) {
     <html lang="en">
       <body className="bg-white text-neutral-900 antialiased dark:bg-neutral-950 dark:text-neutral-100">
         {children}
+        <Toaster />
+        <GlobalErrorToasts />
       </body>
     </html>
   );

@@ -205,7 +205,7 @@ export const SAMPLE_TEMPLATE: TemplateDefinition = {
   kind: 'report',
   source: {
     storagePath: 'samples/template.pdf',
-    fileName: 'template.pdf',
+    fileName: 'Sample certificate.pdf',
     byteSize: 0,
     sha256: '',
   },

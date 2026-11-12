@@ -16,6 +16,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { AiError, processAiAuditCommand } from '@/lib/ai/geminiClient';
 import { cellText, columnsOf, type ApplyReport } from '@/lib/ai/schema';
 import type { DataRow } from '@/lib/template';
+import { notifyError } from '@/lib/ui/notify';
 import { cn } from '@/lib/utils/cn';
 import { useTemplateStore } from '@/store/templateStore';
 
@@ -174,6 +175,7 @@ export function SmartAuditCarousel({
       ]);
     } catch (cause) {
       if (cause instanceof AiError && cause.code === 'ABORTED') return;
+      notifyError(cause);
       setLog((entries) => [
         ...entries.slice(-9),
         {

@@ -147,6 +147,7 @@ try {
   page.on('pageerror', (error) => errors.push(String(error)));
 
   await page.goto(`${origin}/editor`);
+  await page.getByTestId('use-sample').click();
   await page.getByTestId('review-data').waitFor();
 
   // ── AI Magic

@@ -94,6 +94,18 @@ try {
     page.on('pageerror', (error) => errors.push(error.message));
     await page.goto(`${origin}/editor`);
 
+    // ── Upload gateway: nothing is preloaded; the sample is an explicit choice ───────────────
+    await page.getByTestId('editor-gateway').waitFor();
+    check(
+      (await page.getByTestId('page-surface').count()) === 0,
+      'editor starts at the upload gateway, with no template loaded',
+    );
+    await page.getByTestId('use-sample').click();
+    check(
+      (await page.getByTestId('editor-title').textContent()) === 'Sample certificate',
+      'title shows the template name',
+    );
+
     // ── Background and overlay ──────────────────────────────────────────────────────────────
     await page.locator('[data-testid=page-surface][data-rendered=true]').nth(1).waitFor({
       timeout: 30_000,

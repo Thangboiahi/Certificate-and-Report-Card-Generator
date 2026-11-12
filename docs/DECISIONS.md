@@ -1040,3 +1040,43 @@ would need the proxy to verify the cookie on `/login` as well; not worth a secon
 newlines) with project `NEXT_PUBLIC_FIREBASE_PROJECT_ID`. If neither is set it initialises with the project id only, as before,
 so the emulator tests and Cloud Run's own identity still work. Setting only one is a configuration error.
 **Consequence.** The private key lives in environment variables (cloud secret store, never git). Rotate it if exposed.
+
+---
+
+## ADR-032 — App shell: Radix-based Avatar / Menu / Sonner toasts, an upload gateway in the editor, toasts for failures
+
+**Status:** accepted · 2026-11-12 (Phase 11).
+
+**Context.** The backend was complete but the UI was stuck in testing states: no way to sign out, `/editor` always
+opened a hard-coded "Sample certificate", and a failed request either did nothing visible or crashed a component.
+
+**Decision.**
+
+- **Header and sign-out.** `src/app/dashboard/layout.tsx` (server) reads the session for display only and renders
+  `AppHeader` (client): an Avatar with a menu showing who is signed in, a link to the editor, and Sign out. Sign out
+  calls Firebase `signOut()` (best effort: the browser keeps no Firebase session after sign-in, ADR-027), then
+  `DELETE /api/auth/session` (clears the httpOnly cookie; the route already existed), then `window.location.replace('/login')`
+  (a full load, so no signed-in page stays on screen). A failed DELETE keeps the person on the page with a toast, because
+  they are still signed in. The header grants nothing: pages and proxy still gate access (ADR-017).
+- **Dependencies (exact pins, like every other dependency).** `@radix-ui/react-avatar` 1.3.1,
+  `@radix-ui/react-dropdown-menu` 2.2.1, `sonner` 2.0.8. The project has no `components.json`; its "shadcn/ui" components are
+  hand-written Radix wrappers in `src/components/ui/` (dialog, tabs), so Avatar and DropdownMenu follow that pattern, and
+  `ui/sonner.tsx` is shadcn's Toaster (Sonner).
+- **Editor starts empty.** The store already started with `activeTemplate: null`; the editor screen was loading the
+  playground sample on mount. It now resets the store and shows `EditorGateway` (upload zones for the template and an
+  optional CSV) until a template is loaded. The sample stays as an explicit "Try the sample certificate" button (the e2e
+  scripts need a known template). "Back" asks for confirmation, resets the store and returns to the gateway.
+- **Templates from uploads.** PDF is used as is; PNG/JPG is wrapped in a one-page PDF by `imageToPdf` in
+  `src/lib/pdf-engine/` (the only place allowed to import pdf-lib), sized so the long edge is 842 pt. Page sizes come from the
+  engine's `readPdfPages`, so they are the displayed sizes the engine expects (ADR-003). `buildStarterTemplate` creates one
+  text field per CSV column (an image field for photo-like names), stacked down page 1 for the person to drag into place.
+  `UniversalUploadZone` gets a third kind, `'template'`, passed through uncropped.
+- **Errors.** `<Toaster />` and `GlobalErrorToasts` (unhandled rejections and uncaught errors) live in the root layout;
+  `app/error.tsx` is the render-error boundary. `notifyError(cause, fallback)` shows the server's own message for
+  `ApiError`/`AiError`, plain-language text for common Firebase codes (`permission-denied`, `failed-precondition`, ...), and
+  otherwise the caller's fallback, never raw runtime text. Wired into sign-out, template upload, test PDF, AI Magic and
+  Smart Audit (their inline messages stay).
+
+**Consequences.** Uploaded templates use only the standard Helvetica font for now: Indic-script data needs a font choice
+in the editor (a later task). Nothing is saved: leaving `/editor` discards the template until template storage exists.
+Fields for CSV columns are a starting layout, not a finished design. AI failures now show both inline and as a toast.

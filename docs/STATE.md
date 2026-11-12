@@ -1,8 +1,15 @@
 # State
 
-**Updated:** 2026-11-12 (session 16, Phase 10 smoke test) · **Branch:** `ccr-23292c99-dwsyq6`
+**Updated:** 2026-11-12 (session 20, Phase 11) · **Branch:** `claude/global-app-shell-state-f72bd1`
 
 ## Current phase
+
+**Phase 11 (Global App Shell & State Cleanup): COMPLETE** (2026-11-12, ADR-032). Next is Phase 12 (live Kanban and Vault data,
+indexes, empty states). Wired and verified in a browser (dev server): the editor upload gateway (the `/editor` route no longer
+loads the sample; `activeTemplate` starts `null`; Back resets it), global toasts, and the profile menu's Sign out (menu and
+`DELETE /api/auth/session` -> `/login`, on a temporary page with a fake user). Not verified: the header on the real
+`/dashboard/*` pages with a real session, and a sign-out check in `scripts/e2e-auth.mjs` (not written). Remaining from
+`docs/LOCAL_TODO.md`: items 3 and 4 (Kanban and Vault live data, indexes).
 
 **FROZEN: cloud development is paused (2026-11-12) and the project is moving to a local desktop environment.** Do not
 continue in the cloud session. The mandatory usability fixes to do first once the local environment boots (logout/nav

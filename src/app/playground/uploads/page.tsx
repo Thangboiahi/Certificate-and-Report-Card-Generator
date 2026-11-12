@@ -34,7 +34,7 @@ export default function UploadsPlayground() {
           className="flex flex-col gap-2 rounded-2xl border border-neutral-200 p-4 text-sm dark:border-neutral-800"
         >
           <p>
-            {result.kind === 'image'
+            {result.kind !== 'csv'
               ? `${result.file.name} · ${Math.round(result.file.size / 1024)} KB · ${result.file.type}`
               : `${result.file.name} · ${result.data.rows.length} rows`}
           </p>
