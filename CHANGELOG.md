@@ -6,6 +6,7 @@ All notable changes. Newest first. Details and reasoning: `docs/DEVLOG.md`, `doc
 
 ### Changed
 
+- Admin SDK initialises with an explicit service account (`FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY`) when set; otherwise unchanged (ADR-031).
 - Paid claims go through `/api/checkout` and are minted only from a verified Razorpay webhook or the server's own Razorpay check; `/api/claim/order` (Phase 7 work in progress) is removed and `/api/claim` claims free credentials only.
 - Dispatch refuses a claim fee when the institution has no Razorpay Linked Account (`PAYOUT_ACCOUNT_MISSING`, nothing charged).
 - Institutions may carry `razorpayAccountId` (set by super admins).

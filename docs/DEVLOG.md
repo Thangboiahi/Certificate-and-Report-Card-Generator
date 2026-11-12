@@ -5,6 +5,20 @@ was verified, and what is left open. The line-by-line history is in git; this fi
 
 ---
 
+## 2026-11-12 — Session 18: Admin SDK explicit service account; `/login` config loads
+
+**Built.** `src/lib/server/firebase-admin.ts`: when `FIREBASE_CLIENT_EMAIL` and `FIREBASE_PRIVATE_KEY` are both set, the app
+initialises with `cert({ projectId: NEXT_PUBLIC_FIREBASE_PROJECT_ID, clientEmail, privateKey: key.replace(/\\n/g, '\n') })`.
+Neither set: unchanged (project id only; emulators and Cloud Run identity keep working). Only one set: `FirebaseConfigError`.
+ADR-031.
+**Verified.** `npm run typecheck`, eslint, prettier on the file; `npm test` 581/581. `cert()` accepts the injected key
+(PEM, 1704 chars). `npm run dev`: `GET /login` 200, no "not available yet" notice, email form rendered.
+**Not verified.** An actual sign-in, session cookie or Admin SDK call against live Firebase (needs a manual click-test with
+a real email link); `npm run test:emulator` not re-run; `FIREBASE_WEB_API_KEY` is set in the process environment only.
+Note: `.env.local` still has the old, short `FIREBASE_PRIVATE_KEY`; the process variable wins.
+
+---
+
 ## 2026-11-12 — Session 17: Phase 10 smoke test, attempt 2 (Auth still offline in this session)
 
 **Ran.** `npm run dev` (Next 16.4.6, `Environments: .env.local`, ready in 0.4s), `GET /login` → 200, body says

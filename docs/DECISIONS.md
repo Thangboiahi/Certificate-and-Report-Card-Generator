@@ -1028,3 +1028,15 @@ asked for Google Sign-in and/or passwordless email, and for a redirect by role a
 **Consequences.** Next streams a redirect issued inside `<Suspense>` (status 200 with `NEXT_REDIRECT` and a meta
 refresh) rather than a 307; browsers follow it at once, and the e2e script asserts the target from the body. A true 307
 would need the proxy to verify the cookie on `/login` as well; not worth a second copy of the role logic.
+
+---
+
+## ADR-031 — Admin SDK: explicit service account from environment variables, else ambient identity
+
+**Status:** accepted · 2026-11-12. Refines the credentials note in ADR-017/ADR-019 context.
+
+**Context.** Serverless hosting has no ambient identity the Admin SDK can pick up, so Application Default Credentials fail.
+**Decision.** `firebase-admin.ts` uses `cert()` from `FIREBASE_CLIENT_EMAIL` + `FIREBASE_PRIVATE_KEY` (literal `\n` turned into
+newlines) with project `NEXT_PUBLIC_FIREBASE_PROJECT_ID`. If neither is set it initialises with the project id only, as before,
+so the emulator tests and Cloud Run's own identity still work. Setting only one is a configuration error.
+**Consequence.** The private key lives in environment variables (cloud secret store, never git). Rotate it if exposed.

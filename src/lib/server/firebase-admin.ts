@@ -6,12 +6,13 @@
  * needs it; on scale-to-zero Cloud Run that keeps cold starts short.
  *
  * Credentials: token verification needs only the project id (Google's public signing keys are
- * fetched and cached by the SDK). Everything else — setting claims, Firestore — uses the Cloud
- * Run service's own identity through Application Default Credentials. No key file is shipped.
+ * fetched and cached by the SDK). Everything else — setting claims, Firestore — uses an explicit
+ * service account from FIREBASE_CLIENT_EMAIL / FIREBASE_PRIVATE_KEY when both are set (serverless),
+ * otherwise the host's own identity through Application Default Credentials. No key file is shipped.
  */
 import 'server-only';
 
-import { getApps, initializeApp, type App } from 'firebase-admin/app';
+import { cert, getApps, initializeApp, type App, type Credential } from 'firebase-admin/app';
 import { getAuth, type Auth } from 'firebase-admin/auth';
 import { getFirestore, type Firestore } from 'firebase-admin/firestore';
 
@@ -53,7 +54,31 @@ function adminApp(projectId?: string): App {
   if (!resolved) {
     throw new FirebaseConfigError('FIREBASE_PROJECT_ID is not set.');
   }
-  return initializeApp({ projectId: resolved });
+  const credential = serviceAccountCredential();
+  if (!credential) return initializeApp({ projectId: resolved });
+  return initializeApp({ credential, projectId: resolved });
+}
+
+/**
+ * Explicit service-account credential from environment variables, for hosts without an ambient
+ * identity (serverless). `privateKey` arrives with literal `\n` sequences in env files, so they
+ * are turned back into newlines. Returns `null` when the pair is not set, so emulators and
+ * Cloud Run's own identity keep working; a half-set pair is an error, not a silent fallback.
+ */
+function serviceAccountCredential(env: NodeJS.ProcessEnv = process.env): Credential | null {
+  const clientEmail = env.FIREBASE_CLIENT_EMAIL?.trim();
+  const privateKey = env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n');
+  if (!clientEmail && !privateKey) return null;
+  if (!clientEmail || !privateKey) {
+    throw new FirebaseConfigError(
+      'FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY must be set together.',
+    );
+  }
+  return cert({
+    projectId: env.NEXT_PUBLIC_FIREBASE_PROJECT_ID?.trim() || firebaseProjectId(env) || undefined,
+    clientEmail,
+    privateKey,
+  });
 }
 
 export function adminAuth(): Auth {
