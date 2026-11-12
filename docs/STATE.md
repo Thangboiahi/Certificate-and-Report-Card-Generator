@@ -1,11 +1,14 @@
 # State
 
-**Updated:** 2026-11-12 (session 15, Phase 10 smoke test started) · **Branch:** `ccr-23292c99-dwsyq6`
+**Updated:** 2026-11-12 (session 16, Phase 10 smoke test) · **Branch:** `ccr-23292c99-dwsyq6`
 
 ## Current phase
 
-**Current Phase: Phase 10 (Live Smoke Test).** Keys were reported as injected, but none were visible to the agent session
-(no `FIREBASE_*`, `RAZORPAY_*`, `GEMINI_*` variables, no `.env.local`); see the smoke-test result in `docs/DEVLOG.md`.
+**Current Phase: Phase 10 (Live Smoke Test).** Server boots cleanly with `.env.local` (Next.js loads it), but `/login`
+shows "not available yet": the app reads `FIREBASE_WEB_API_KEY`, while `.env.local` only has `NEXT_PUBLIC_FIREBASE_API_KEY`.
+Also: `FIREBASE_PRIVATE_KEY`/`FIREBASE_CLIENT_EMAIL` are not read by the code (Admin SDK uses Application Default
+Credentials, `src/lib/server/firebase-admin.ts`), and `FIREBASE_PRIVATE_KEY` is only 40 characters (looks truncated).
+**`.env.local` is tracked in git on the remote: treat every key in it as exposed and rotate.** Details in `docs/DEVLOG.md`.
 
 Previous status:
 

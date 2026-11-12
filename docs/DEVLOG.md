@@ -5,6 +5,17 @@ was verified, and what is left open. The line-by-line history is in git; this fi
 
 ---
 
+## 2026-11-12 — Session 16: Phase 10 smoke test with `.env.local`
+
+**Ran.** `npm run dev` with the keys from `.env.local` (names checked, values never printed). Server ready, log shows
+`Environments: .env.local`, `GET /login` 200. No full test suite run.
+**Found.** (1) `/login` renders "not available yet": `FIREBASE_WEB_API_KEY` is missing (file has
+`NEXT_PUBLIC_FIREBASE_API_KEY`; the app serves config at request time, ADR-027). (2) `FIREBASE_PRIVATE_KEY` (40 chars) and
+`FIREBASE_CLIENT_EMAIL` are unused by the code; `FIREBASE_PRIVATE_KEY` looks truncated. (3) Empty: `APP_ORIGIN`,
+`RAZORPAY_WEBHOOK_SECRET`, `CRON_SECRET`, `RESEND_FROM`, `WHATSAPP_CLAIM_TEMPLATE`; `RESEND_API_KEY` appears twice.
+(4) `.env.local` is committed to the remote branch: rotate all keys and remove it from history.
+**Open.** Add `FIREBASE_WEB_API_KEY` (cloud env vars, not git), rotate exposed keys, rerun the smoke test.
+
 ## 2026-11-12 — Session 15: Phase 10 live smoke test (not completed: no keys visible)
 
 **Found.** The live keys were reported as injected, but the agent session had none of them: no `FIREBASE_PROJECT_ID`,
