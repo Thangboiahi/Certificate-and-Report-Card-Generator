@@ -5,6 +5,28 @@ was verified, and what is left open. The line-by-line history is in git; this fi
 
 ---
 
+## 2026-11-12 — Session 11: Phase 7 completed (the vault)
+
+**Found.** Most of Phase 7 was already on disk from the interrupted session: `src/lib/firebase.ts`
+(email link + phone OTP), `/claim/[token]` with `ClaimFlow` (sign-in, free claim, Phase 8
+checkout), `src/lib/vault/vault.ts` and `POST /api/vault/share`. The brief's root-level paths
+(`lib/…`, `app/…`) map to `src/`. Only the vault UI was missing.
+
+**Built.** `src/components/vault/VaultDashboard.tsx` (card grid, Valid/Expired/Revoked badge,
+"Generate Public Link" → copyable URL, "Stop sharing"); `/dashboard/vault` now lists the user's items
+server-side; public `/v/[shareId]` (needed so a generated link resolves; uses the existing
+`findSharedCredential`); `vault_items` `ownerUid + issuedAt` composite index;
+`scripts/e2e-vault.mjs`. No Phase 8 / escrow file was changed.
+
+**Verified.** `npm run lint`, `typecheck`, `npm test` (544), `npm run build`, `npm run test:emulator`
+(70), `scripts/e2e-vault.mjs` 10/10 (own items only, link creation, public page without a session,
+revoked link stops working, signed-out/other-user share refused).
+
+**Not verified / open.** Email-link and phone-OTP sign-in were not clicked through in a browser; no
+`/login` page yet; Razorpay still untested against its real test mode (E13).
+
+---
+
 ## 2026-11-12 — Session 10: Phase 8, escrow payment engine (Razorpay Route)
 
 **Built.**

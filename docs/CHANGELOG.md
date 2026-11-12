@@ -4,6 +4,12 @@ Newest first. Per-change detail: git history and the repository-root `CHANGELOG.
 
 ## Completed
 
+- **Phase 7 — Passwordless Claiming & The Vault:** email-link and phone-OTP sign-in
+  (`src/lib/firebase.ts`), public claim page `/claim/[token]` (free claim, or the Phase 8
+  checkout), `VaultDashboard` grid with "Generate Public Link", public verification page
+  `/v/[shareId]`, `ownerUid + issuedAt` index. Vault verified in Chromium against emulators
+  (`scripts/e2e-vault.mjs`). **Not yet exercised in a browser:** the email-link and phone-OTP
+  sign-in itself, and a `/login` page (see `STATE.md`).
 - **Phase 8 — Escrow Payment Engine:** pay-to-claim checkout with a server-priced cart (claim fee
   - optional AI add-on), Razorpay Route split (platform fee kept, institution share transferred and
     held 7 days), webhook-only minting with exact signature checks, automatic refunds with transfer
@@ -23,5 +29,4 @@ Newest first. Per-change detail: git history and the repository-root `CHANGELOG.
 
 ## In progress
 
-- **Phase 7 — Passwordless Claiming & The Vault** (see `STATE.md`): sign-in, claim page and free
-  claims built; vault dashboard, share page and browser sign-in tests open.
+- Nothing. Next: Phase 9 (waiting for the brief).

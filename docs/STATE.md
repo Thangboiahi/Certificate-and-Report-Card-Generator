@@ -1,11 +1,12 @@
 # State
 
-**Updated:** 2026-11-12 (session 10) · **Branch:** `ccr-23292c99-dwsyq6`
+**Updated:** 2026-11-12 (session 11) · **Branch:** `ccr-23292c99-dwsyq6`
 
 ## Current phase
 
-Phase 8 — Escrow Payment Engine: **built and verified against a mock of Razorpay** (ADR-028).
-Phase 7 — Passwordless Claiming & The Vault: **still open** (items below).
+Phase 9 — **awaiting the brief** (the AI add-on is already sold at checkout but not fulfilled).
+Phase 7 — Passwordless Claiming & The Vault: **complete** (vault dashboard, share page, index).
+Phase 8 — Escrow Payment Engine: complete, verified against a mock of Razorpay (ADR-028).
 
 ## Active blockers
 
@@ -13,12 +14,17 @@ Phase 7 — Passwordless Claiming & The Vault: **still open** (items below).
 
 ## Next immediate task
 
-Finish Phase 7, then wait for the Phase 9 brief:
+Wait for the Phase 9 brief. Small gaps carried over from Phase 7 (not blocking):
 
-- `components/vault/VaultDashboard.tsx`, vault page wiring, public `/v/[shareId]` page, `/login`.
-- `ownerUid + issuedAt` composite index (vault listing).
-- `scripts/e2e-claim.mjs`: email-link and phone-OTP sign-in in the browser (the Phase 8 e2e
-  creates verified accounts directly and does not exercise them).
+- `/login` page: the proxy redirects signed-out visitors to `/login?next=…`, which does not exist
+  yet (the claim page has its own sign-in). `PasswordlessSignIn` can be reused.
+- `scripts/e2e-claim.mjs`: email-link and phone-OTP sign-in in the browser. The e2e scripts create
+  verified accounts directly, so the sign-in UI is unit/emulator-tested only, never clicked through.
+
+### Phase 7 on disk (verified: 544 unit, 70 emulator, 10/10 `scripts/e2e-vault.mjs`)
+
+- `src/lib/firebase.ts`, `src/components/auth/PasswordlessSignIn.tsx`, `/claim/[token]` + `ClaimFlow`.
+- `src/components/vault/VaultDashboard.tsx` on `/dashboard/vault`; `/v/[shareId]`; `POST /api/vault/share`.
 
 ### Phase 8 on disk (verified: 544 unit, 70 emulator, 52/52 `scripts/e2e-checkout.mjs`)
 

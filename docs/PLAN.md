@@ -3,7 +3,7 @@
 The single place to see what we are building, where we are, what comes next, and what is waiting
 on a decision. Updated at the end of every working session.
 
-**Last updated:** 2026-11-12 (session 10 — Phase 8 escrow payment engine; Phase 7 still open)
+**Last updated:** 2026-11-12 (session 11 — Phase 7 completed; Phase 9 next)
 
 Related records: [ARCHITECTURE.md](./ARCHITECTURE.md) (how it works) ·
 [DECISIONS.md](./DECISIONS.md) (why) · [DEVLOG.md](./DEVLOG.md) (history)
@@ -87,14 +87,16 @@ Pay-to-claim checkout with revenue splitting. Decision in ADR-028.
 | Micro-Issuer payouts (they cannot dispatch yet, Q6)                                                                    | ⬜ Q9            |
 | Cloud Scheduler job for `/api/cron/reconcile-payments` (every 15 minutes)                                              | ⬜ when live     |
 
-### Phase 7 — Passwordless Claiming & The Vault (still open)
+### Phase 7 — Passwordless Claiming & The Vault (done, two gaps noted)
 
 | Item                                                                                                                | Status |
 | ------------------------------------------------------------------------------------------------------------------- | ------ |
-| `lib/firebase.ts`: `sendSignInLinkToEmail` magic link and phone OTP sign-in                                         | 🟡     |
-| `app/claim/[token]/page.tsx`: sign in with the contact the link was sent to; fee → checkout (Phase 8); free → claim | 🟡     |
-| `components/vault/VaultDashboard.tsx`: grid of owned vault items, "Generate Public Link"                            | ⬜     |
-| Tests and end-to-end verification                                                                                   | ⬜     |
+| `lib/firebase.ts`: `sendSignInLinkToEmail` magic link and phone OTP sign-in                                         | ✅     |
+| `app/claim/[token]/page.tsx`: sign in with the contact the link was sent to; fee → checkout (Phase 8); free → claim | ✅     |
+| `components/vault/VaultDashboard.tsx`: grid of owned vault items, "Generate Public Link"                            | ✅     |
+| Public verification page `/v/[shareId]`; `ownerUid + issuedAt` index                                                | ✅     |
+| Vault end to end in Chromium (`scripts/e2e-vault.mjs`, 10 checks)                                                   | ✅     |
+| Email-link / phone-OTP sign-in driven in a browser (`scripts/e2e-claim.mjs`); `/login` page                         | ⬜     |
 
 ### Phase 1 — Foundation & RBAC (two items open)
 
