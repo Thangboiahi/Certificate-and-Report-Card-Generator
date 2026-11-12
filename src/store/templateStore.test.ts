@@ -46,6 +46,42 @@ const store = () => useTemplateStore.getState();
 const placeholder = (id: string) =>
   store().activeTemplate!.placeholders.find((entry) => entry.id === id)!;
 
+describe('templateStore: empty start and added fields', () => {
+  beforeEach(() => {
+    store().reset();
+  });
+
+  it('starts, and resets to, no template (the editor shows its upload gateway)', () => {
+    expect(store().activeTemplate).toBeNull();
+    store().loadTemplate(template(), [{ Name: 'Asha' }]);
+    expect(store().activeTemplate).not.toBeNull();
+    store().reset();
+    expect(store().activeTemplate).toBeNull();
+    expect(store().dataRows).toEqual([]);
+    expect(store().selectedPlaceholderId).toBeNull();
+  });
+
+  it('adds fields once, skipping ids already in use and pages that do not exist', () => {
+    store().addPlaceholders([placeholderStub('late')]);
+    expect(store().activeTemplate).toBeNull();
+
+    store().loadTemplate(template());
+    const before = store().activeTemplate!.placeholders.length;
+    store().addPlaceholders([
+      placeholderStub('late'),
+      placeholderStub('name'),
+      { ...placeholderStub('nowhere'), pageIndex: 9 },
+    ]);
+    const ids = store().activeTemplate!.placeholders.map((p) => p.id);
+    expect(ids).toHaveLength(before + 1);
+    expect(ids).toContain('late');
+  });
+});
+
+function placeholderStub(id: string): TextPlaceholder {
+  return textBox({ id, box: { x: 10, y: 10, width: 100, height: 20 } }) as TextPlaceholder;
+}
+
 describe('templateStore', () => {
   beforeEach(() => {
     store().reset();

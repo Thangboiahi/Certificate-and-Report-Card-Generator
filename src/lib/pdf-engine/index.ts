@@ -26,3 +26,4 @@ export type {
   RowWarning,
   WarningCode,
 } from './types';
+export { imageToPdf } from './image-template';

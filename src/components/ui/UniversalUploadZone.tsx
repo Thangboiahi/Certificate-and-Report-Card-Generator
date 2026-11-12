@@ -4,6 +4,9 @@
  * The one way files enter the app. Drop or tap to pick a file; images go through
  * `ImageCropModal`, CSVs through `CsvPreviewModal`, and only a confirmed result reaches
  * `onConfirm`. Nothing is uploaded or stored here.
+ *
+ * `'template'` is a third kind for a document background: a PDF, PNG or JPG that is handed over
+ * exactly as chosen (no cropping, which would change the page the fields are placed on).
  */
 import { Upload } from 'lucide-react';
 import { useState } from 'react';
@@ -14,10 +17,12 @@ import { ImageCropModal } from '@/components/ui/ImageCropModal';
 import { cn } from '@/lib/utils/cn';
 import { MAX_CSV_BYTES, parseCsvFile, type ParsedCsv } from '@/lib/utils/csv';
 
-export type UploadKind = 'image' | 'csv';
+export type UploadKind = 'image' | 'csv' | 'template';
 
 export type ConfirmedUpload =
-  { kind: 'image'; file: File } | { kind: 'csv'; file: File; data: ParsedCsv };
+  | { kind: 'image'; file: File }
+  | { kind: 'template'; file: File }
+  | { kind: 'csv'; file: File; data: ParsedCsv };
 
 export interface UniversalUploadZoneProps {
   /** Which kinds of file to accept. Defaults to both. */
@@ -40,8 +45,14 @@ const IMAGE_ACCEPT: Accept = {
   'image/webp': ['.webp'],
 };
 const CSV_ACCEPT: Accept = { 'text/csv': ['.csv'], 'application/vnd.ms-excel': ['.csv'] };
+const TEMPLATE_ACCEPT: Accept = {
+  'application/pdf': ['.pdf'],
+  'image/jpeg': ['.jpg', '.jpeg'],
+  'image/png': ['.png'],
+};
 
 function kindOf(file: File): UploadKind | null {
+  if (file.type === 'application/pdf' || /\.pdf$/i.test(file.name)) return 'template';
   if (file.type.startsWith('image/')) return 'image';
   if (file.type === 'text/csv' || /\.csv$/i.test(file.name)) return 'csv';
   return null;
@@ -76,14 +87,19 @@ export function UniversalUploadZone({
 
   const acceptMap: Accept = {
     ...(accept.includes('image') ? IMAGE_ACCEPT : {}),
+    ...(accept.includes('template') ? TEMPLATE_ACCEPT : {}),
     ...(accept.includes('csv') ? CSV_ACCEPT : {}),
   };
 
   async function route(file: File) {
     setError(null);
     const kind = kindOf(file);
-    if (kind === 'image' && accept.includes('image')) {
+    if (kind === 'template' && accept.includes('template')) {
+      onConfirm({ kind: 'template', file });
+    } else if (kind === 'image' && accept.includes('image')) {
       setImageFile(file);
+    } else if (kind === 'image' && accept.includes('template')) {
+      onConfirm({ kind: 'template', file });
     } else if (kind === 'csv' && accept.includes('csv')) {
       if (file.size > MAX_CSV_BYTES) {
         setError(`${file.name}: larger than ${MAX_CSV_BYTES / (1024 * 1024)} MB.`);
@@ -108,7 +124,9 @@ export function UniversalUploadZone({
     disabled: disabled || parsing,
     // Each kind has its own limit; checked here so one dropzone can hold both.
     validator: (file) =>
-      file instanceof File && kindOf(file) === 'image' && file.size > maxImageInputBytes
+      file instanceof File &&
+      (kindOf(file) === 'image' || kindOf(file) === 'template') &&
+      file.size > maxImageInputBytes
         ? { code: 'file-too-large', message: 'too large' }
         : null,
     onDropAccepted: ([file]) => file && void route(file),
@@ -117,7 +135,9 @@ export function UniversalUploadZone({
   });
 
   const kinds = accept
-    .map((kind) => (kind === 'image' ? 'JPG, PNG or WebP image' : 'CSV file'))
+    .map((kind) =>
+      kind === 'image' ? 'JPG, PNG or WebP image' : kind === 'csv' ? 'CSV file' : 'PDF, PNG or JPG',
+    )
     .join(' or ');
 
   return (

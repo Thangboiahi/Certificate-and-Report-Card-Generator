@@ -36,6 +36,10 @@ export interface TemplateStoreState {
   /** Starts editing a template. Clears the selection. */
   loadTemplate(template: TemplateDefinition, dataRows?: DataRow[]): void;
   setDataRows(dataRows: DataRow[]): void;
+  /** Appends placeholders (fields for a new CSV's columns). Ids already in use are skipped. */
+  addPlaceholders(placeholders: Placeholder[]): void;
+  /** Appends placeholders (e.g. fields for a newly uploaded CSV's columns). Ids already in use are skipped. */
+  addPlaceholders(placeholders: Placeholder[]): void;
   /** Selects a placeholder (opens its property bar), or clears the selection with `null`. */
   selectPlaceholder(id: string | null): void;
   /**
@@ -111,6 +115,17 @@ export const useTemplateStore = create<TemplateStoreState>()((set, get) => ({
 
   setDataRows(dataRows) {
     set({ dataRows });
+  },
+
+  addPlaceholders(placeholders) {
+    const template = get().activeTemplate;
+    if (!template) return;
+    const taken = new Set(template.placeholders.map((placeholder) => placeholder.id));
+    const added = placeholders.filter(
+      (placeholder) => !taken.has(placeholder.id) && template.pages[placeholder.pageIndex],
+    );
+    if (added.length === 0) return;
+    set({ activeTemplate: { ...template, placeholders: [...template.placeholders, ...added] } });
   },
 
   selectPlaceholder(id) {
