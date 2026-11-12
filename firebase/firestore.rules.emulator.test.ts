@@ -416,6 +416,21 @@ describe.skipIf(!HAS_EMULATORS)('firestore.rules', () => {
     });
   });
 
+  describe('dispatches', () => {
+    it('are closed to every client, including the institution and super admins', async () => {
+      await seed('dispatches/d-1', { institutionId: 'A', channel: 'email', creditsCharged: 3 });
+      for (const db of [adminOf('A'), staffOf('A'), superAdmin(), individual('alice')]) {
+        await assertFails(getDoc(doc(db, 'dispatches/d-1')));
+        await assertFails(setDoc(doc(db, 'dispatches/d-2'), { institutionId: 'A' }));
+        await assertFails(updateDoc(doc(db, 'dispatches/d-1'), { creditsRefunded: 3 }));
+      }
+    });
+
+    it('cannot be used to change credits from the browser', async () => {
+      await assertFails(updateDoc(doc(adminOf('A'), 'institutions/A'), { creditBalance: 1000 }));
+    });
+  });
+
   it('denies every other collection', async () => {
     await assertFails(getDoc(doc(superAdmin(), 'users/root')));
     await assertFails(setDoc(doc(superAdmin(), 'anything/else'), { a: 1 }));

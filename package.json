@@ -20,6 +20,7 @@
     "verify": "npm run format:check && npm run lint && npm run typecheck && npm run test && npm run build"
   },
   "dependencies": {
+    "@hello-pangea/dnd": "18.0.1",
     "@pdf-lib/fontkit": "1.1.1",
     "@radix-ui/react-dialog": "1.3.1",
     "@radix-ui/react-tabs": "1.2.1",
@@ -40,6 +41,7 @@
     "react-dropzone": "20.2.0",
     "react-easy-crop": "6.2.5",
     "regenerator-runtime": "0.14.1",
+    "resend": "6.35.0",
     "server-only": "0.0.1",
     "tailwind-merge": "3.7.0",
     "zod": "4.6.7",

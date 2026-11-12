@@ -13,6 +13,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { createSession } from '@/lib/auth/session';
 import { SESSION_COOKIE, sessionCookieOptions } from '@/lib/auth/session-cookie';
 import { FirebaseConfigError } from '@/lib/server/firebase-admin';
+import { isSameOrigin } from '@/lib/server/same-origin';
 
 const MAX_TOKEN_LENGTH = 8192;
 
@@ -21,25 +22,6 @@ function error(status: number, code: string, message: string): NextResponse {
     { error: { code, message } },
     { status, headers: { 'Cache-Control': 'no-store' } },
   );
-}
-
-/**
- * True when the browser says the call comes from this site. The `Origin` header's host must equal
- * the host the request was addressed to (`APP_ORIGIN`'s host when configured, otherwise the
- * forwarded or direct `Host` header) — the same comparison Next.js makes for Server Actions.
- * Browsers always send `Origin` on POST and DELETE, so a missing header is refused too.
- */
-function isSameOrigin(request: NextRequest): boolean {
-  const origin = request.headers.get('origin');
-  if (!origin || !URL.canParse(origin)) return false;
-  const configured = process.env.APP_ORIGIN?.trim();
-  const expectedHost = configured
-    ? URL.canParse(configured)
-      ? new URL(configured).host
-      : null
-    : (request.headers.get('x-forwarded-host')?.split(',')[0]?.trim() ??
-      request.headers.get('host'));
-  return expectedHost !== null && new URL(origin).host === expectedHost;
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {

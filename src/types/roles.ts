@@ -68,6 +68,8 @@ export const COLLECTIONS = {
   institutions: 'institutions',
   templates: 'templates',
   vaultItems: 'vault_items',
+  /** Dispatch records (credit ledger for WhatsApp / email sends). Server-only. */
+  dispatches: 'dispatches',
 } as const;
 
 // ───────────────────────────────────────────────────────────────────────────────────────────────
