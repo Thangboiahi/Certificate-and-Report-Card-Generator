@@ -53,6 +53,7 @@ them.
 | `node scripts/e2e-batch.mjs`      | 2,500-row ZIP batch in Chromium with worker heap sampling (after build) |
 | `node scripts/e2e-uploads.mjs`    | Upload gateway in Chromium (phone and desktop)                          |
 | `node scripts/e2e-editor.mjs`     | Tap-to-Place editor in Chromium, down to the worker's PDF positions     |
+| `scripts/e2e-dispatch.mjs`        | Dispatch routes + Kanban against emulators and mock providers (header)  |
 
 ## Rules of the codebase
 
@@ -80,6 +81,9 @@ them.
   `firebase/firestore.rules`: change both together, and extend the rules tests with every rules
   change (`npm run test:emulator`).
 - Never set Firebase emulator variables on a deployed server (ADR-019).
+- Anything that spends credits deducts them in a Firestore transaction **before** calling an
+  outside service, records it in a server-only ledger keyed by an idempotency key, and refunds
+  failures (ADR-024). Outgoing messages never contain URLs taken from the request.
 
 ## Environment notes
 

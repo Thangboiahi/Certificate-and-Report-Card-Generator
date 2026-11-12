@@ -3,7 +3,7 @@
 The single place to see what we are building, where we are, what comes next, and what is waiting
 on a decision. Updated at the end of every working session.
 
-**Last updated:** 2026-11-12 (session 6 — Phase 4, canvas UI and workspace toggle)
+**Last updated:** 2026-11-12 (session 7 — Phase 5, CRM Kanban and dispatch)
 
 Related records: [ARCHITECTURE.md](./ARCHITECTURE.md) (how it works) ·
 [DECISIONS.md](./DECISIONS.md) (why) · [DEVLOG.md](./DEVLOG.md) (history)
@@ -64,7 +64,8 @@ Status key: ✅ done and verified · 🟡 in progress · ⬜ not started
 | 2     | Universal Uploader & Image Editor              | ✅                                     |
 | 3     | Core PDF Engine (Web Worker, ZIP, image proxy) | ✅                                     |
 | 4     | Canvas UI & Workspace Toggles                  | ✅ (real-phone check open)             |
-| 5–9   | To be briefed                                  | ⬜                                     |
+| 5     | CRM & Kanban Dashboards (dispatch)             | ✅ (live provider accounts open)       |
+| 6–9   | To be briefed                                  | ⬜                                     |
 
 ### Phase 1 — RBAC & Foundation (two items open)
 
@@ -118,6 +119,21 @@ Decisions in ADR-022 and ADR-023.
 | Editing a customer's own uploaded template and saving it to Firestore                                                                                  | ⬜ later phases |
 | Resize handles, adding/removing fields, undo                                                                                                           | ⬜ not briefed  |
 
+### Phase 5 — CRM & Kanban Dashboards, dispatch
+
+Decisions in ADR-024 and ADR-025.
+
+| Item                                                                                                   | Status           |
+| ------------------------------------------------------------------------------------------------------ | ---------------- |
+| `KanbanBoard` (`@hello-pangea/dnd`): New Requests · Pending User Data · Ready to Issue · Issued        | ✅               |
+| `POST /api/dispatch/whatsapp`: Meta Cloud API Utility template with claim link and expiry              | ✅ (mocked)      |
+| `POST /api/dispatch/email`: Resend batch with claim link and expiry warning                            | ✅ (mocked)      |
+| Credits deducted in a transaction before sending; refunds for failures; idempotent `dispatches` ledger | ✅               |
+| Sending through real Meta and Resend accounts                                                          | ⬜ needs E17/E18 |
+| Storing requests (`credential_requests`) and saving board moves                                        | ⬜ not briefed   |
+| Claim tokens: issuing, storing, `/claim/{token}` page and QR                                           | ⬜ not briefed   |
+| Reconciling dispatches left `sending` after a crash                                                    | ⬜ before launch |
+
 ### Foundation already built (before the phase plan)
 
 Available to every phase; verified in sessions 1–2:
@@ -141,19 +157,21 @@ Available to every phase; verified in sessions 1–2:
 
 ### Still open
 
-| #   | Item                                                                               | Needed when                    |
-| --- | ---------------------------------------------------------------------------------- | ------------------------------ |
-| P   | Briefs for Phases 5–9                                                              | Before each phase              |
-| E3  | Region — recommended **asia-south1 (Mumbai)**; Firestore's region is permanent     | When a live project is created |
-| E4  | Deployment access (you run commands, or a deploy service account / GitHub Actions) | When going live                |
-| E5  | Product name and domain                                                            | OAuth consent screen, launch   |
-| E6  | Super Admin email(s) for the live project (an emulator account is used until then) | When going live                |
-| E9  | How customers store photos today (sheet links, Google Form uploads, a folder)      | Data-intake phase              |
-| E12 | Pricing: tiers and what each includes                                              | Billing phase                  |
-| E13 | Razorpay account (KYC complete), test keys first                                   | Billing phase                  |
-| E14 | Business details for GST invoices                                                  | Billing phase                  |
-| E15 | Privacy policy and terms, incl. children's data (DPDP Act)                         | Before launch                  |
-| E16 | Support email and logo                                                             | Before launch                  |
+| #   | Item                                                                                                        | Needed when                    |
+| --- | ----------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| P   | Briefs for Phases 6–9                                                                                       | Before each phase              |
+| E17 | Meta WhatsApp Business: verified business, sender number, approved Utility template (4 parameters, ADR-024) | Before real WhatsApp dispatch  |
+| E18 | Resend account with a verified sending domain and the sender address                                        | Before real email dispatch     |
+| E3  | Region — recommended **asia-south1 (Mumbai)**; Firestore's region is permanent                              | When a live project is created |
+| E4  | Deployment access (you run commands, or a deploy service account / GitHub Actions)                          | When going live                |
+| E5  | Product name and domain                                                                                     | OAuth consent screen, launch   |
+| E6  | Super Admin email(s) for the live project (an emulator account is used until then)                          | When going live                |
+| E9  | How customers store photos today (sheet links, Google Form uploads, a folder)                               | Data-intake phase              |
+| E12 | Pricing: tiers and what each includes                                                                       | Billing phase                  |
+| E13 | Razorpay account (KYC complete), test keys first                                                            | Billing phase                  |
+| E14 | Business details for GST invoices                                                                           | Billing phase                  |
+| E15 | Privacy policy and terms, incl. children's data (DPDP Act)                                                  | Before launch                  |
+| E16 | Support email and logo                                                                                      | Before launch                  |
 
 ## 5. Suggested improvements (backlog)
 
@@ -217,6 +235,8 @@ phase.
 | R9  | **Proxy cost and abuse.**                                                                        | Authenticated only; limits on size and time. Rate limiting and quotas come with tiers (B23).                                                                                                                                                        |
 | Q3  | Should issuing a credential always spend institution credits?                                    | If yes, issuance must move to a server route that debits credits in a transaction, and browser writes to `vault_items` be closed (ADR-018). Needed before the billing phase.                                                                        |
 | Q4  | Should institution staff and admins also issue credentials personally (Micro-Issuer workspace)?  | Today every signed-in person sees both workspaces (ADR-023). Decide with the institution phase.                                                                                                                                                     |
+| Q5  | Price of a dispatched message (credits per WhatsApp / email)? Placeholder: 1 credit each.        | Decide with pricing (E12). WhatsApp Utility messages cost the business money per message in India.                                                                                                                                                  |
+| Q6  | Should Micro-Issuers (no institution, no credits) be able to dispatch?                           | Today only institution admins and staff can (ADR-024).                                                                                                                                                                                              |
 | Q1  | Should free-tier documents carry a watermark?                                                    | Open — pricing decision (E12).                                                                                                                                                                                                                      |
 | Q2  | Is a desktop-first power-user mode needed alongside mobile-first?                                | Open — depends on who the first customers are.                                                                                                                                                                                                      |
 

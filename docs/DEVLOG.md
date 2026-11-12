@@ -5,6 +5,47 @@ was verified, and what is left open. The line-by-line history is in git; this fi
 
 ---
 
+## 2026-11-12 — Session 7: Phase 5, CRM Kanban and dispatch
+
+**Built.**
+
+- `src/components/dashboard/KanbanBoard.tsx` (`@hello-pangea/dnd` 18.0.1): New Requests, Pending
+  User Data, Ready to Issue, Issued; mouse, touch and keyboard drags; optimistic moves with
+  rollback. Shown with sample requests on `/dashboard/institution` and `/dashboard/issue`.
+- `POST /api/dispatch/whatsapp` (Meta WhatsApp Cloud API, Utility template: name, issuer, claim
+  link, expiry) and `POST /api/dispatch/email` (Resend 6.35.0, batches of 100). Logic in
+  `src/lib/dispatch/`.
+- Credits deducted in a Firestore transaction before any provider call, refunds for failed
+  recipients, idempotent `dispatches` ledger (server-only in the rules). ADR-024, ADR-025.
+- Shared same-origin check (`src/lib/server/same-origin.ts`); `.env.example` documents the
+  provider variables.
+
+**Decided beyond the brief.** Dispatch requires a verified institution and directory membership;
+claim links are built from `APP_ORIGIN`, never accepted from the request; records hold no contact
+details; a bare 10-digit number must be an Indian mobile.
+
+**Verified.**
+
+- 493 unit tests (33 new): validation (phones, duplicates, expiry, injected URLs), WhatsApp
+  payload and concurrency ≤ 8, per-recipient failures, Resend batching with idempotency keys,
+  HTML escaping, board moves.
+- 43 emulator tests (9 new): credits gone before the provider is called; refunds; replay without
+  re-send; three concurrent dispatches charged exactly; unverified / insufficient / non-member
+  refused with nothing charged; `dispatches` closed to every client.
+- `scripts/e2e-dispatch.mjs`, 28/28 on the production build with a recording mock of Meta and
+  Resend: 401 / 403 (individual, cross-site, stale member, unverified) / 400; 3 WhatsApp
+  recipients with one undeliverable → charged 3, refunded 1; exact template parameters; replay
+  sends nothing; email batch escaped with link and expiry; 402 with nothing sent; 503 when not
+  configured; Kanban mouse, keyboard and touch long-press drags; columns scroll sideways on a
+  phone.
+- e2e-auth 53/53 still; `npm run verify` clean.
+
+**Open.** No real Meta or Resend account (E17, E18), so live delivery is untested. Requests are
+not stored and moves not saved; claim tokens are not issued or redeemable; no reconciliation of
+dispatches stuck in `sending`. Pricing per message (Q5) and Micro-Issuer dispatch (Q6) open.
+
+---
+
 ## 2026-11-12 — Session 6: Phase 4, canvas UI and workspace toggle
 
 **Built.** The Tap-to-Place editor and the vault/issuer toggle, as briefed:

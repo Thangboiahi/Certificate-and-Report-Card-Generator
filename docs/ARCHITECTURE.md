@@ -1,6 +1,6 @@
 # Architecture
 
-How the system works **today** (end of session 6, Phase 4). Reasons for the choices are in
+How the system works **today** (end of session 7, Phase 5). Reasons for the choices are in
 [DECISIONS.md](./DECISIONS.md); status and roadmap are in [PLAN.md](./PLAN.md).
 
 ## Overview
@@ -25,27 +25,29 @@ the local emulators; live Firebase, Storage, Sheets, Drive and Razorpay are **no
 
 ## Code map
 
-| Path                                    | Purpose                                                                                       |
-| --------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `src/lib/template/`                     | Template schema (`types.ts`), runtime validation (`schema.ts`), data bindings (`bindings.ts`) |
-| `src/lib/pdf-engine/`                   | The generation engine. Only place that imports pdf-lib / fontkit                              |
-| `src/lib/images/`                       | Image sniffing by magic bytes, EXIF orientation. Pure, shared by server and engine            |
-| `src/lib/image-proxy/`                  | Proxy logic: auth, SSRF defences, safe fetch, handler (framework-independent)                 |
-| `src/app/api/proxy-image/`              | Thin Next.js route over the handler                                                           |
-| `src/workers/`                          | Web Worker, comlink client, image loader, canvas image processor                              |
-| `src/types/roles.ts`                    | Roles, claims contract, institution / vault item schemas                                      |
-| `src/lib/auth/`, `src/proxy.ts`         | Claims management, sessions, route protection, server-side guards                             |
-| `src/app/api/auth/session/`             | Creates / clears the session cookie                                                           |
-| `firebase/`, `firebase.json`            | Firestore security rules and their emulator tests                                             |
-| `src/components/ui/`, `src/lib/utils/`  | Upload gateway (Phase 2): dropzone, crop and CSV preview modals, image and CSV helpers        |
-| `src/store/templateStore.ts`            | Editor state (Zustand): active template in points, selection, preview rows (Phase 4)          |
-| `src/lib/editor/`                       | Percent ↔ point conversion, pdf.js page display, CSS preview of fields                        |
-| `src/components/canvas/`                | Tap-to-Place canvas (`MobileEditor`) and its bottom sheet (`PropertyBar`)                     |
-| `src/components/dashboard/`             | `WorkspaceToggle`: vault ⇄ issuer workspaces                                                  |
-| `src/app/editor/`                       | The editor screen (sample template until template upload is wired)                            |
-| `src/app/dashboard/(workspace)/`        | Vault and issuer pages sharing the toggle layout                                              |
-| `src/app/playground/`                   | Developer harness that runs the whole stack on a sample job                                   |
-| `tests/`, `scripts/`, `public/samples/` | Test support and fixtures, e2e script and asset generators, sample template and photos        |
+| Path                                         | Purpose                                                                                       |
+| -------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `src/lib/template/`                          | Template schema (`types.ts`), runtime validation (`schema.ts`), data bindings (`bindings.ts`) |
+| `src/lib/pdf-engine/`                        | The generation engine. Only place that imports pdf-lib / fontkit                              |
+| `src/lib/images/`                            | Image sniffing by magic bytes, EXIF orientation. Pure, shared by server and engine            |
+| `src/lib/image-proxy/`                       | Proxy logic: auth, SSRF defences, safe fetch, handler (framework-independent)                 |
+| `src/app/api/proxy-image/`                   | Thin Next.js route over the handler                                                           |
+| `src/workers/`                               | Web Worker, comlink client, image loader, canvas image processor                              |
+| `src/types/roles.ts`                         | Roles, claims contract, institution / vault item schemas                                      |
+| `src/lib/auth/`, `src/proxy.ts`              | Claims management, sessions, route protection, server-side guards                             |
+| `src/app/api/auth/session/`                  | Creates / clears the session cookie                                                           |
+| `firebase/`, `firebase.json`                 | Firestore security rules and their emulator tests                                             |
+| `src/components/ui/`, `src/lib/utils/`       | Upload gateway (Phase 2): dropzone, crop and CSV preview modals, image and CSV helpers        |
+| `src/store/templateStore.ts`                 | Editor state (Zustand): active template in points, selection, preview rows (Phase 4)          |
+| `src/lib/editor/`                            | Percent ↔ point conversion, pdf.js page display, CSS preview of fields                        |
+| `src/components/canvas/`                     | Tap-to-Place canvas (`MobileEditor`) and its bottom sheet (`PropertyBar`)                     |
+| `src/components/dashboard/`                  | `WorkspaceToggle`: vault ⇄ issuer workspaces                                                  |
+| `src/app/editor/`                            | The editor screen (sample template until template upload is wired)                            |
+| `src/app/dashboard/(workspace)/`             | Vault and issuer pages sharing the toggle layout                                              |
+| `src/lib/dispatch/`, `src/app/api/dispatch/` | WhatsApp / email claim-link dispatch with the credit ledger (Phase 5)                         |
+| `src/lib/crm/`, `src/types/crm.ts`           | Credential-request stages and Kanban board state                                              |
+| `src/app/playground/`                        | Developer harness that runs the whole stack on a sample job                                   |
+| `tests/`, `scripts/`, `public/samples/`      | Test support and fixtures, e2e script and asset generators, sample template and photos        |
 
 ## Template schema
 
@@ -183,6 +185,30 @@ MobileEditor ── per page: <div aspect-ratio=w/h, container-type=inline-size>
 (optimistic highlight); the page is the active tab's panel. Each page checks access itself.
 ADR-023.
 
+## Dispatch (Phase 5)
+
+```
+POST /api/dispatch/{whatsapp|email}   (institution admin/staff, session cookie, same-origin)
+  │ validate body (≤ 500 targets, phone/email, claim token, expiry in future, no duplicates)
+  ▼
+Tx 1: membership ✓ verified ✓ balance ≥ n ✓ → creditBalance −= n, dispatches/{id} = sending
+  ▼
+provider: Meta Cloud API (8 parallel)  |  Resend batch (100 per call, idempotency key)
+  ▼
+Tx 2: creditBalance += failed, dispatches/{id} = completed + per-recipient results
+```
+
+`id = sha256(institution, channel, idempotencyKey)`: a repeated key returns the stored outcome
+without sending or charging. Links are `APP_ORIGIN/claim/{token}`. Environment variables in
+`.env.example`; each channel returns 503 until configured. `dispatches` is server-only in the
+Firestore rules. ADR-024.
+
+## CRM board (Phase 5)
+
+`KanbanBoard` (`@hello-pangea/dnd`) shows credential requests in four stages; state logic in
+`src/lib/crm/board.ts`. Mounted with sample requests on `/dashboard/institution` and
+`/dashboard/issue`; moves are not stored yet. ADR-025.
+
 ## Web Worker
 
 `createPdfEngineClient()` starts the worker and wraps it with comlink. Callbacks (`onDocument`,
@@ -207,15 +233,18 @@ Cloud Run notes for when it is deployed:
 
 ## Testing
 
-- `npm test` — 460 unit/integration tests (Node). Engine tests render PDFs with poppler
+- `npm test` — 493 unit/integration tests (Node). Engine tests render PDFs with poppler
   (`pdftoppm`/`pdftotext`) and assert on pixels and word positions; they skip without poppler.
 - `tests/showcase.test.ts` writes pictures to `tests/output/` for visual review.
 - `node scripts/e2e-playground.mjs` (after `npm run build`) — production server + Chromium.
-- `npm run test:emulator` — 34 tests against the Firebase Auth + Firestore emulators (claims,
+- `npm run test:emulator` — 43 tests against the Firebase Auth + Firestore emulators (claims,
   sessions, proxy, rules).
 - `firebase emulators:exec --only auth,firestore --project demo-v6 'node scripts/e2e-auth.mjs'`
   (after `npm run build`) — 53 auth checks against the production server, including the
   workspace toggle in Chromium.
+- `firebase emulators:exec --only auth,firestore --project demo-v6 'node scripts/e2e-dispatch.mjs'`
+  (after `npm run build`) — 28 checks: dispatch routes against a recording mock of Meta and
+  Resend, credits, and the Kanban board in Chromium.
 - `node scripts/e2e-editor.mjs` (after `npm run build`) — the editor on a touch phone and a
   desktop: rendering, alignment, D-pad, font size, drag, tap-to-place, swipe-to-close, and the
   worker's PDF read back with `pdftotext -bbox`.

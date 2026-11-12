@@ -37,6 +37,8 @@ when to revisit it. This is the file to open when someone asks "why is it built 
 | 021 | Batch output: streamed ZIP of Blobs; the image proxy stays same-origin (no CORS)       | Accepted |
 | 022 | Tap-to-Place editor: pdf.js to display, percent on screen, points in the store         | Accepted |
 | 023 | Workspace toggle: one route per workspace; the tabs follow the address                 | Accepted |
+| 024 | Dispatch: credits deducted in a transaction before sending; refunds; idempotent ledger | Accepted |
+| 025 | CRM Kanban with `@hello-pangea/dnd`; optimistic moves; not persisted yet               | Accepted |
 
 ---
 
@@ -716,3 +718,68 @@ not load the issuer's tools for someone only opening their vault.
 **Consequences.** Institution staff and admins also see both workspaces (their institution
 dashboard is separate). Whether institution members should issue personally is a product
 question (PLAN Q4).
+
+---
+
+## ADR-024 — Dispatch: credits deducted in a transaction before sending; refunds; idempotent ledger
+
+**Date:** 2026-11-12 · **Status:** Accepted
+
+**Context.** Phase 5 asked for `POST /api/dispatch/whatsapp` (Meta WhatsApp Cloud API, Utility
+template with the claim link and an expiry warning) and `POST /api/dispatch/email` (Resend), with
+credits deducted from `institutions/{id}.creditBalance` **before** the external APIs are called.
+
+**Decision.**
+
+- **Who:** institution admins and staff only (session cookie, revocation checked, same-origin).
+  Membership is re-checked against the institution document (claims can lag), and the
+  institution must be `verified` — an unverified account must not be able to message thousands
+  of people from our sender. Micro-Issuers have no credit balance, so they cannot dispatch yet.
+- **Charge first, then send, then settle.** One Firestore transaction checks membership,
+  verification and balance, deducts `1 credit × recipients` and creates `dispatches/{id}`
+  (`status: sending`). Only then is the provider called. A second transaction refunds one credit
+  per failed recipient and stores per-recipient results. Concurrent dispatches cannot overspend
+  (tested: three parallel dispatches of 3 from 10 credits leave exactly 1).
+- **Idempotency.** The body carries `idempotencyKey`; the record id is
+  `sha256(institution, channel, key)`. Re-posting the same key returns the stored outcome
+  (`replayed: true`) without sending or charging; reusing it for a different recipient count is
+  refused (409). Resend batches also carry an idempotency key. WhatsApp has none, so the record
+  is the only guard.
+- **Claim links are built on the server** from `APP_ORIGIN` + a validated token
+  (`/claim/{token}`); the request cannot supply a URL. A hijacked staff account therefore cannot
+  use our WhatsApp number or email domain for phishing links. `APP_ORIGIN` becomes required for
+  dispatch.
+- **WhatsApp:** template named by `WHATSAPP_CLAIM_TEMPLATE`, body parameters {{1}} name,
+  {{2}} issuer, {{3}} link, {{4}} expiry (en-IN date, India time). 8 requests in parallel, 10 s
+  timeout each. Phone numbers normalised to E.164 digits; bare 10-digit numbers must be Indian
+  mobiles.
+- **Email:** Resend batch API, 100 per call; names HTML-escaped; expiry warning in the body.
+- **Limits:** 500 recipients per request; duplicates and already-expired links are refused.
+- **Privacy:** dispatch records hold counts, results and provider message ids — no phone numbers
+  or emails (DPDP data minimisation). `dispatches` is closed to all clients in the rules.
+- **Not configured → 503 before anything is charged.**
+
+**Price.** One credit per message per channel is a placeholder until pricing (PLAN E12).
+
+**Consequences / open.** If the server dies after charging and before settling, the record stays
+`sending` with the full charge; a reconciliation job (from provider ids) is needed before launch.
+Claim tokens are only format-checked: storing and redeeming them (the `/claim` page) is not built
+yet. Meta requires an approved template, a verified business and a registered number; Resend
+requires a verified sending domain (PLAN E17, E18).
+
+---
+
+## ADR-025 — CRM Kanban with `@hello-pangea/dnd`; optimistic moves; not persisted yet
+
+**Date:** 2026-11-12 · **Status:** Accepted
+
+**Decision.** `KanbanBoard` uses `@hello-pangea/dnd` 18.0.1 (as briefed; the maintained fork of
+react-beautiful-dnd) for mouse, touch (press and hold) and keyboard dragging with screen-reader
+announcements. Four fixed stages (`src/types/crm.ts`). Moves apply at once; an optional `onMove`
+persists them, and a rejected promise rolls the move back with a message. Pure state logic is in
+`src/lib/crm/board.ts`. On phones the columns form a horizontally snapping strip.
+
+**Not persisted.** No brief defines where requests come from (recipient self-service form, CSV
+import, Google Sheets) or who may move them, so the board shows sample requests on the
+institution dashboard and the issuer workspace. A `credential_requests` collection with rules
+comes with that brief.

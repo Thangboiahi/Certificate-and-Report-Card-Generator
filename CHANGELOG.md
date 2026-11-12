@@ -12,6 +12,7 @@ All notable changes. Newest first. Details and reasoning: `docs/DEVLOG.md`, `doc
 
 ### Added
 
+- Phase 5: `KanbanBoard` for credential requests (`@hello-pangea/dnd`); `POST /api/dispatch/whatsapp` (Meta Cloud API) and `POST /api/dispatch/email` (Resend) with credits deducted before sending, refunds and an idempotent `dispatches` ledger.
 - Phase 4: Tap-to-Place editor at `/editor` (`MobileEditor` with pdf.js backgrounds, drag and tap-to-place; `PropertyBar` bottom sheet with D-pad and font size; Zustand `templateStore` in PDF points); `WorkspaceToggle` between "My Digital Vault" and "Issue Credentials"; guarded `/dashboard/issue`.
 - Phase 3: `generatePdfBatch` returns a single ZIP of PDFs (streamed, memory-flat to 2,500 rows); worker at `src/workers/pdf.worker.ts`, client at `src/lib/pdfEngine.ts`; image proxy accepts the session cookie.
 - Phase 2 upload gateway: `UniversalUploadZone`, `ImageCropModal` (crop + ≤ 200 KB compression), `CsvPreviewModal` (5-row preview, required-column check), shadcn Dialog.
