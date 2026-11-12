@@ -1080,3 +1080,43 @@ opened a hard-coded "Sample certificate", and a failed request either did nothin
 **Consequences.** Uploaded templates use only the standard Helvetica font for now: Indic-script data needs a font choice
 in the editor (a later task). Nothing is saved: leaving `/editor` discards the template until template storage exists.
 Fields for CSV columns are a starting layout, not a finished design. AI failures now show both inline and as a toast.
+
+---
+
+## ADR-033 — The Kanban board reads and writes Firestore through the server; refreshed by polling, not a browser listener
+
+**Status:** accepted · 2026-11-12 (Phase 12).
+
+**Context.** The board showed six hard-coded cards and moves were not saved. Phase 12 asked for the `@hello-pangea/dnd`
+board to "subscribe to" live Firestore collections. But the browser holds no Firebase session after sign-in (ADR-027: the
+server's httpOnly session cookie is the only credential), so a client-side `onSnapshot` listener cannot authenticate, and the
+cards hold recipients' names and contacts.
+
+**Decision.**
+
+- **Collection `credential_requests`** (server-only; `allow read, write: if false` in `firestore.rules`, like `dispatches` and
+  `claim_tokens`; rules test extended). Document: `ownerKey`, `stage`, `order`, `recipientName`, `credential`, optional `email`,
+  `phone`, `note`, `createdByUid`, `createdAt`, `updatedAt`.
+- **Whose board.** `ownerKey` is `inst:<institutionId>` for `inst_admin` and `inst_staff` (the whole institution shares one
+  board) and `uid:<uid>` for everyone else (a Micro-Issuer's own board). Every function in `src/lib/crm/requests.ts` derives it
+  from the verified session, never from the request body, so one board cannot reach another's cards.
+- **API `/api/requests`** (`GET` list, `POST` create, `PATCH` move), same-origin, session cookie, signed-in; logic in
+  `src/lib/crm/handler.ts`. Moves run in a Firestore transaction.
+- **Order inside a column** is a number per card (`order`); a drop writes the midpoint between its new neighbours, so a move
+  changes one document. When repeated midpoints exhaust precision the column is respaced inside the same transaction
+  (`src/lib/crm/order.ts`).
+- **No composite index.** Queries use equality filters only (`ownerKey`, optionally `stage`) and sort in memory (at most 500
+  cards), so the board needs no entry in `firestore.indexes.json`.
+- **"Live" means polling.** The server renders the first snapshot; `LiveKanban` re-reads `GET /api/requests` every 15 s and when
+  the tab regains focus, and swaps the board only when the data differs and no card is being dragged or saved. Drags are
+  optimistic and roll back if the save fails (unchanged). Revisit with Server-Sent Events or a custom-token Firestore listener
+  only if staff report stale boards.
+- **Vault index errors.** `src/lib/firestore-errors.ts` recognises Firestore's `FAILED_PRECONDITION` "needs an index" failure and
+  extracts the console link; `IndexErrorAlert` shows it as a button on the vault and board pages. The link is also logged as
+  `indexLink`.
+- **Empty states.** "No active requests" (board) and "Your vault is empty" (vault).
+
+**Consequences.** A move is one HTTP round trip, and colleagues see changes within about 15 s, not instantly. The vault's
+`vault_items` index (`ownerUid` + `issuedAt`) is declared in `firestore.indexes.json` but still has to be built in the live
+project (the alert links to it). Requests are created by hand with "Add request"; there is no recipient-facing way to ask for a
+credential yet, and moving a card to Issued does not issue anything (the issue flow stays in the editor and dispatch).

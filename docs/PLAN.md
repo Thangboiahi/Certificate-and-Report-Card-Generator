@@ -3,7 +3,7 @@
 The single place to see what we are building, where we are, what comes next, and what is waiting
 on a decision. Updated at the end of every working session.
 
-**Last updated:** 2026-11-12 (session 20 — Phase 11 app shell done; Phase 12 live data next)
+**Last updated:** 2026-11-12 (session 21 — Phase 12 live Kanban and Vault wiring built; live index build and e2e run open)
 
 Related records: [ARCHITECTURE.md](./ARCHITECTURE.md) (how it works) ·
 [DECISIONS.md](./DECISIONS.md) (why) · [DEVLOG.md](./DEVLOG.md) (history)
@@ -70,6 +70,7 @@ Status key: ✅ done and verified · 🟡 in progress · ⬜ not started
 | 9     | AI Enrichment & Smart Audit                | 🟡 (built; needs Gemini key, metering)        |
 | 10    | Live API Key Injection & Production Deploy | ⬜ (ready to start; needs E13, E17, E18, E20) |
 | 11    | Global App Shell & State Cleanup (local)   | ✅ (sign-out e2e and live-session check open) |
+| 12    | Dashboard Live Wiring & Vault (local)      | 🟡 (built, emulator-verified; live index and e2e run open) |
 
 ### Phase 8 — Escrow Payment Engine (Razorpay Route)
 

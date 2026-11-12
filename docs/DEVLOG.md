@@ -5,6 +5,42 @@ was verified, and what is left open. The line-by-line history is in git; this fi
 
 ---
 
+## 2026-11-12 — Session 21: Phase 12, live Kanban and Vault wiring
+
+**Built.** (ADR-033)
+
+- The Kanban reads and writes Firestore: new server-only collection `credential_requests`, `src/lib/crm/requests.ts` (list, create,
+  move in a transaction, board scoped to the institution or the person), `src/lib/crm/order.ts` (midpoint ordering, respace when
+  precision runs out), `/api/requests` (GET, POST, PATCH), `LiveKanban` (saves drags, "Add request" form, refresh every 15 s and on
+  focus, "No active requests" state) and `RequestsSection` on `/dashboard/institution` and `/dashboard/issue`. `sample-requests.ts`
+  is deleted; the Issue page's hard-coded "Sample certificate and report card" link is now a plain "Template editor" link.
+- Vault: it already read real `vault_items`; it now catches `FAILED_PRECONDITION` and shows `IndexErrorAlert` with the exact Firebase
+  Console link (`src/lib/firestore-errors.ts`), and the empty state reads "Your vault is empty".
+- Rules: explicit server-only match for `credential_requests`, with a rules test.
+- `scripts/e2e-dispatch.mjs` now seeds real `credential_requests` documents before each Kanban run and checks that moves persist.
+
+**Decision worth knowing.** The directive said "subscribe to" Firestore. The browser has no Firebase session (ADR-027), so a client
+listener cannot read; the server mediates and the board polls. Details and the way out are in ADR-033.
+
+**Verified.** `npm run typecheck`, `npm run lint`, `npm test` (570 passed, 39 skipped as before), emulator suite run directly with
+`npx firebase emulators:exec --only auth,firestore --project demo-v6 "npx vitest run --config vitest.emulator.config.mts"` (78 passed,
+including `requests.emulator.test.ts` and the new rules test), `npm run build`. Then a production build against the emulators with
+seeded users and cards, driven in the browser pane: the institution board shows only its own cards (another school's card absent;
+PATCH on it returns 404; bad stage returns 400); a PATCH moved a card and it was still there after a reload; "Add request" adds and saves;
+the open board picked up a change made outside it; a user with no data sees "No active requests" and "Your vault is empty"; a vault owner
+sees the seeded credential; the Phase 11 header shows on the real dashboard pages with a real session.
+**Not verified.** A real mouse drag in the pane (synthetic mouse events started a drag but never completed a cross-column drop; pane key
+events did not lift a card), so the drag-and-save path is covered by the route, the emulator tests and the updated, unrun
+`e2e-dispatch.mjs`. The index alert against a real Firestore failure (the emulator does not enforce indexes): its extraction and
+rendering are unit-tested with a message in Firestore's real format. Nothing was run against the live Firebase project.
+**Learned.** `npm run test:emulator` does not work from a Windows shell (the script's single quotes); run the `firebase emulators:exec`
+command above instead. A page in the hidden browser pane reports `visibilityState: "hidden"`, so the board's refresh skips it.
+**Open.** Build the `vault_items` index in the live project (LOCAL_TODO item 4); run `e2e-dispatch.mjs` where Playwright is installed;
+recipient-facing ways to create requests and "Issued" actually issuing; other composite queries (the audit ledger) could use the same
+alert.
+
+---
+
 ## 2026-11-12 — Session 20: Phase 11, global app shell and state cleanup
 
 **Built.** (ADR-032)

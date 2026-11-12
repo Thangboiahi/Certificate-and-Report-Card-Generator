@@ -17,6 +17,7 @@ All notable changes. Newest first. Details and reasoning: `docs/DEVLOG.md`, `doc
 
 ### Added
 
+- Phase 12, live dashboards: the Kanban reads and writes Firestore (`credential_requests`, `/api/requests`, "Add request", refresh every 15 s, "No active requests" state) and the sample requests are gone; the vault shows an alert with the exact Firebase Console link when an index is missing, and "Your vault is empty" when it has nothing (ADR-033).
 - Editor manual entry: "Skip & Enter Data Manually" in the upload gateway (no CSV needed), plus an in-editor panel to add fields and type values; Test PDF works with no data.
 - Phase 11, app shell: `/dashboard` layout with an Avatar profile menu and **Sign out** (Firebase `signOut()`, clears the session cookie, back to `/login`); `/editor` upload gateway (PDF/PNG/JPG template + optional CSV, field per column, Back resets) replacing the hard-coded sample, which is now an explicit button; global toasts (Sonner `Toaster`, `notifyError`, `GlobalErrorToasts`, `app/error.tsx`). New dependencies `@radix-ui/react-avatar`, `@radix-ui/react-dropdown-menu`, `sonner` (ADR-032).
 - `/login` page (B-001): email-link / SMS sign-in via `PasswordlessSignIn`, then redirect by role (`inst_admin`/`inst_staff` → `/dashboard/institution`, `individual` → `/dashboard/vault`, `super_admin` → `/admin`; a safe `?next=` the user may open wins). `roleHomePath` and `postLoginPath` in `src/lib/auth/access.ts`; login checks in `scripts/e2e-auth.mjs`.

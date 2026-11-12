@@ -296,11 +296,20 @@ reviews the rows and applies bulk fixes written in plain language. ADR-029.
   unknown rows, columns and placeholders are skipped and reported.
 - `AI_NOT_CONFIGURED` (503) until `GEMINI_API_KEY` is set. Use is not metered yet.
 
-## CRM board (Phase 5)
+## CRM board (Phases 5 and 12)
 
-`KanbanBoard` (`@hello-pangea/dnd`) shows credential requests in four stages; state logic in
-`src/lib/crm/board.ts`. Mounted with sample requests on `/dashboard/institution` and
-`/dashboard/issue`; moves are not stored yet. ADR-025.
+`KanbanBoard` (`@hello-pangea/dnd`) shows credential requests in four stages; state logic in `src/lib/crm/board.ts`. Since
+Phase 12 (ADR-033) the cards live in the server-only Firestore collection `credential_requests`:
+
+- `RequestsSection` (server component, on `/dashboard/institution` and `/dashboard/issue`) loads the caller's board with the
+  Admin SDK (`src/lib/crm/requests.ts`) and renders `LiveKanban`, or `IndexErrorAlert` if Firestore reports a missing index.
+- `LiveKanban` (client) saves drags with `PATCH /api/requests`, adds cards with `POST`, and re-reads with `GET` every 15 s and on
+  focus. It shows "No active requests" when the board is empty.
+- Board scope comes from the session: `inst:<institutionId>` for institution staff and admins, `uid:<uid>` otherwise.
+- Column order is a per-card number (midpoint inserts, `src/lib/crm/order.ts`); no composite index.
+
+The vault page (`/dashboard/vault`) reads `vault_items` the same way (`listVaultItems`) and shows `IndexErrorAlert` with the Firebase
+Console link when the `ownerUid` + `issuedAt` index is missing.
 
 ## Web Worker
 

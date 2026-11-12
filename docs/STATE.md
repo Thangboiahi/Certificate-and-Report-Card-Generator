@@ -1,15 +1,19 @@
 # State
 
-**Updated:** 2026-11-12 (session 20, Phase 11) · **Branch:** `claude/global-app-shell-state-f72bd1`
+**Updated:** 2026-11-12 (session 21, Phase 12) · **Branch:** `claude/global-app-shell-state-f72bd1`
 
 ## Current phase
 
-**Phase 11 (Global App Shell & State Cleanup): COMPLETE** (2026-11-12, ADR-032). Next is Phase 12 (live Kanban and Vault data,
-indexes, empty states). Wired and verified in a browser (dev server): the editor upload gateway (the `/editor` route no longer
-loads the sample; `activeTemplate` starts `null`; Back resets it), global toasts, and the profile menu's Sign out (menu and
-`DELETE /api/auth/session` -> `/login`, on a temporary page with a fake user). Not verified: the header on the real
-`/dashboard/*` pages with a real session, and a sign-out check in `scripts/e2e-auth.mjs` (not written). Remaining from
-`docs/LOCAL_TODO.md`: items 3 and 4 (Kanban and Vault live data, indexes).
+**Phase 12 (Dashboard Live Wiring & Vault): BUILT** (2026-11-12, ADR-033). The Kanban reads and writes Firestore
+(`credential_requests`, server-only) through `/api/requests`, with no sample data left; the vault shows real `vault_items`; a missing
+index now shows an alert with the exact Firebase Console link; both have empty states. Verified against the Auth and Firestore
+emulators with a production build: typecheck, lint, 570 unit tests, 78 emulator tests, and a real signed-in browser session (board scoped to
+the institution, move saved and still there after reload, add-request form, refresh picks up outside changes, empty states, vault
+data, and the Phase 11 header on real `/dashboard` pages). Not verified: a mouse drag in the browser pane (synthetic events would not
+complete a cross-column drop; `scripts/e2e-dispatch.mjs` now seeds real cards and checks persistence but was not run, no Playwright
+here); the index alert against a real Firestore index failure (the emulator does not enforce indexes; covered by tests with the real
+message format); anything against the live Firebase project. **Still manual:** build the `vault_items` index in the live project
+(deploy `firebase/firestore.indexes.json`, or click the link the vault page now shows) and re-check. Phase 11 is COMPLETE (ADR-032).
 
 **FROZEN: cloud development is paused (2026-11-12) and the project is moving to a local desktop environment.** Do not
 continue in the cloud session. The mandatory usability fixes to do first once the local environment boots (logout/nav
