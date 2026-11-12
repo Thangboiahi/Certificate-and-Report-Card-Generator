@@ -6,6 +6,7 @@ All notable changes. Newest first. Details and reasoning: `docs/DEVLOG.md`, `doc
 
 ### Changed
 
+- Roadmap replaced by the 9-phase B2B2C plan; ADR-015 accepted; local-emulator development until a live project exists.
 - `TemplateRecord.ownerId` is now `ownerUid`, with `institutionId` and server timestamps.
 
 ### Added

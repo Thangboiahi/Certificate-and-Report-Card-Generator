@@ -5,6 +5,22 @@ was verified, and what is left open. The line-by-line history is in git; this fi
 
 ---
 
+## 2026-11-12 — Session 3: administrative update from the executive
+
+No code changes. Decisions recorded:
+
+- **No live GCP/Firebase or billing yet.** All Firebase work runs against the local emulators
+  (`npm run test:emulator`, project `demo-v6`) with placeholder `.env.local` values
+  (`.env.example` now documents an emulator section).
+- **Samples:** mock CSVs and a blank Canva template arrive at the data-intake phase.
+- **ADR-015 approved:** Google access only via `drive.file` + Google Picker.
+- **Scale target:** mid-range Android phone, batches up to 2,500 rows.
+- **Roadmap:** the M0–M7 milestones are discarded in favour of the executive's 9-phase B2B2C
+  architecture. PLAN.md now shows Phase 1 (RBAC & Foundation) as current; Phases 2–9 are recorded
+  as each brief arrives.
+
+---
+
 ## 2026-11-12 — Session 2: V6 Phase 1, foundation and role-based access control
 
 **Goal.** The product grows into a B2B2C credential platform (V6). Establish roles (guest,

@@ -450,7 +450,7 @@ session.
 
 ## ADR-015 — Google access via `drive.file` + Google Picker only
 
-**Date:** 2026-11-11 · **Status:** Proposed — needs the executive's decision before milestone M3
+**Date:** 2026-11-11 · **Status:** Accepted (approved by the executive on 2026-11-12)
 
 **Context.** We need to read a customer's Google Sheet and write PDFs to their Drive. Google
 classifies OAuth scopes: broad Drive scopes (`drive`, `drive.readonly`) are _restricted_ and
