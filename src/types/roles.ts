@@ -151,7 +151,7 @@ export interface VaultItemSchema {
   recipientName?: string;
   /** The issued batch the claim link came from. */
   batchId?: string;
-  /** Unguessable id of the public verification page (`/v/{shareId}`), or `null` when not shared. */
+  /** Unguessable id of the public verification page (`/verify/{shareId}`), or `null` when not shared. */
   shareId?: string | null;
 
   // Set when the claim was paid for (Phase 8, ADR-028).

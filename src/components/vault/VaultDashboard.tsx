@@ -2,7 +2,7 @@
 
 /**
  * The recipient's vault: a grid of the credentials they own, each with a "Generate Public Link"
- * button that turns on its public verification page (`/v/{shareId}`) and a way to turn it off again
+ * button that turns on its public verification page (`/verify/{shareId}`) and a way to turn it off again
  * (old links then stop working). Ownership is enforced by the server (`POST /api/vault/share`,
  * ADR-027); this component only displays what the server listed and asks for changes.
  */
@@ -28,7 +28,7 @@ const DATE = new Intl.DateTimeFormat('en-IN', {
 });
 
 function shareUrl(shareId: string): string {
-  return new URL(`/v/${shareId}`, window.location.origin).toString();
+  return new URL(`/verify/${shareId}`, window.location.origin).toString();
 }
 
 async function requestShare(itemId: string, enabled: boolean): Promise<string | null> {

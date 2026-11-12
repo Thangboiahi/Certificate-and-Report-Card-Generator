@@ -1,6 +1,6 @@
 /**
  * The recipient's vault (Phase 7, ADR-027): listing their credentials and sharing one through an
- * unguessable public verification link (`/v/{shareId}`). Server-only (Admin SDK); every function
+ * unguessable public verification link (`/verify/{shareId}`). Server-only (Admin SDK); every function
  * checks ownership itself.
  */
 import 'server-only';
