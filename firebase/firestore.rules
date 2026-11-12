@@ -178,6 +178,14 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // ── credential_requests/{requestId} ───────────────────────────────────────────────────────
+    // The Kanban pipeline (ADR-033). Holds recipients' names and contacts, so it is server-only:
+    // the board is read and moved through /api/requests, which scopes every call to the caller's
+    // institution (or to the caller, for a Micro-Issuer).
+    match /credential_requests/{requestId} {
+      allow read, write: if false;
+    }
+
     // ── Everything else ───────────────────────────────────────────────────────────────────────
     match /{document=**} {
       allow read, write: if false;

@@ -81,6 +81,8 @@ export const COLLECTIONS = {
   claimTokens: 'claim_tokens',
   /** Pay-to-claim checkouts: cart, escrow split, payment outcome (Phase 8, ADR-028). Server-only. */
   claimOrders: 'claim_orders',
+  /** The issuer's Kanban pipeline of credential requests (Phase 12, ADR-033). Server-only. */
+  credentialRequests: 'credential_requests',
 } as const;
 
 // ───────────────────────────────────────────────────────────────────────────────────────────────
