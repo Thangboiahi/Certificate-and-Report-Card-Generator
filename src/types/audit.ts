@@ -76,6 +76,8 @@ export interface ClaimTokenDocument {
   purgeAfter: TimestampLike;
   /** Set when the recipient claims the credential (claim flow: later phase). */
   claimedAt: TimestampLike | null;
+  /** The verification id already printed on this recipient's document (ADR-035), if any. */
+  verificationId?: string;
 }
 
 /** A batch as sent to the browser (times as epoch milliseconds). */

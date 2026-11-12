@@ -237,11 +237,22 @@ export function mintVaultItem(
     issuerName: input.issuerName,
     recipientName: token.recipientName,
     batchId: token.batchId,
-    shareId: null,
+    // A credential whose QR code was printed before claiming keeps that id (sharing is on from the
+    // start, and the owner can stop it); otherwise sharing is off until the owner turns it on.
+    shareId: token.verificationId ?? null,
+    ...(token.verificationId ? { mintedShareId: token.verificationId } : {}),
     ...(payment
       ? { orderId: payment.orderId, paymentId: payment.paymentId, addOns: payment.addOns }
       : {}),
   } as unknown as VaultItemDocument);
+  if (token.verificationId) {
+    // `set` with merge: harmless even if the stub were missing; the vault item takes precedence.
+    transaction.set(
+      db.collection(COLLECTIONS.verificationStubs).doc(token.verificationId),
+      { status: 'claimed', claimedAt: FieldValue.serverTimestamp(), vaultItemId: tokenId },
+      { merge: true },
+    );
+  }
   transaction.update(db.collection(COLLECTIONS.claimTokens).doc(tokenId), {
     claimedAt: FieldValue.serverTimestamp(),
     claimedByUid: input.ownerUid,

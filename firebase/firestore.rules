@@ -186,6 +186,13 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // ── verification_stubs/{shareId} ──────────────────────────────────────────────────────────
+    // Verification ids printed in QR codes before anyone claims (ADR-035). Written and read only by
+    // server code; the public verification page reads them through the server.
+    match /verification_stubs/{shareId} {
+      allow read, write: if false;
+    }
+
     // ── Everything else ───────────────────────────────────────────────────────────────────────
     match /{document=**} {
       allow read, write: if false;

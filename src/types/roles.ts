@@ -83,6 +83,8 @@ export const COLLECTIONS = {
   claimOrders: 'claim_orders',
   /** The issuer's Kanban pipeline of credential requests (Phase 12, ADR-033). Server-only. */
   credentialRequests: 'credential_requests',
+  /** Pre-minted verification ids printed in QR codes, before anyone claims (Phase 14, ADR-035). Server-only. */
+  verificationStubs: 'verification_stubs',
 } as const;
 
 // ───────────────────────────────────────────────────────────────────────────────────────────────
@@ -153,6 +155,11 @@ export interface VaultItemSchema {
   batchId?: string;
   /** Unguessable id of the public verification page (`/verify/{shareId}`), or `null` when not shared. */
   shareId?: string | null;
+  /**
+   * The verification id printed in the QR code of the issued document (ADR-035). Sharing is on from
+   * the claim; "Generate Public Link" restores this id rather than minting a new one.
+   */
+  mintedShareId?: string;
 
   // Set when the claim was paid for (Phase 8, ADR-028).
   /** Razorpay order and payment that paid the claim fee. */

@@ -14,6 +14,21 @@ describe('verificationState', () => {
     expect(verificationState({ status: 'valid', expiresAt: NOW - 1 }, NOW)).toBe('expired');
   });
 
+  it('is unclaimed for a pre-minted id nobody has claimed, unless revoked or expired', () => {
+    expect(verificationState({ status: 'valid', expiresAt: null, claimed: false }, NOW)).toBe(
+      'unclaimed',
+    );
+    expect(verificationState({ status: 'revoked', expiresAt: null, claimed: false }, NOW)).toBe(
+      'revoked',
+    );
+    expect(verificationState({ status: 'valid', expiresAt: NOW - 1, claimed: false }, NOW)).toBe(
+      'expired',
+    );
+    expect(verificationState({ status: 'valid', expiresAt: null, claimed: true }, NOW)).toBe(
+      'valid',
+    );
+  });
+
   it('is revoked whatever its expiry says', () => {
     expect(verificationState({ status: 'revoked', expiresAt: null }, NOW)).toBe('revoked');
     expect(verificationState({ status: 'revoked', expiresAt: NOW - 1 }, NOW)).toBe('revoked');

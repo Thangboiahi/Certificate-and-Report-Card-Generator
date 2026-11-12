@@ -42,6 +42,7 @@ const STATUS: Record<DispatchErrorCode, number> = {
   BATCH_NOT_FOUND: 404,
   REISSUE_BLOCKED: 409,
   NOTHING_TO_REISSUE: 409,
+  VERIFICATION_ID_INVALID: 400,
 };
 
 /** `APP_ORIGIN` — claim links are built from it, never from request headers. */
