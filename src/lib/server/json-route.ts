@@ -21,10 +21,11 @@ export function error(status: number, code: string, message: string, details?: o
   return json(status, { error: { code, message, ...(details ? { details } : {}) } });
 }
 
-export function log(severity: 'INFO' | 'ERROR', message: string, fields: object): void {
-  console[severity === 'ERROR' ? 'error' : 'info'](
-    JSON.stringify({ severity, message, ...fields }),
-  );
+/** One structured log line (Cloud Logging reads `severity`). */
+export function log(severity: 'INFO' | 'WARNING' | 'ERROR', message: string, fields: object): void {
+  const write =
+    severity === 'ERROR' ? console.error : severity === 'WARNING' ? console.warn : console.info;
+  write(JSON.stringify({ severity, message, ...fields }));
 }
 
 export type Gate =

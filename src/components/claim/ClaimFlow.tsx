@@ -6,11 +6,15 @@
  *   not signed in            → passwordless sign-in with the channel the link came through
  *   signed in, wrong contact → explain, offer to switch account
  *   signed in, free          → claims at once ("claim instantly to Vault")
- *   signed in, fee           → Razorpay Checkout, then claims with the verified payment
+ *   signed in, fee           → cart (Base Fee + optional AI add-on) → POST /api/checkout →
+ *                              Razorpay Checkout → poll GET /api/checkout until the server has
+ *                              seen the capture (webhook) and minted the credential (ADR-028).
+ *                              The browser's own success callback proves nothing and mints
+ *                              nothing.
  *
  * After signing in, the server page is refreshed so it re-checks the account against the link.
  */
-import { CheckCircle2, CreditCard, LoaderCircle, UserRoundX, Wallet } from 'lucide-react';
+import { CheckCircle2, CreditCard, LoaderCircle, Sparkles, UserRoundX, Wallet } from 'lucide-react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -19,6 +23,7 @@ import { useEffect, useRef, useState } from 'react';
 import { PasswordlessSignIn } from '@/components/auth/PasswordlessSignIn';
 import type { ClaimView } from '@/lib/claim/claim';
 import { endSession, type FirebaseClientConfig } from '@/lib/firebase';
+import type { CartLine, CheckoutStatus, ClaimAddOn, RefundReason } from '@/types/payments';
 
 type Phase =
   | { kind: 'sign-in' }
@@ -26,14 +31,11 @@ type Phase =
   | { kind: 'claiming' }
   | { kind: 'pay' }
   | { kind: 'paying' }
+  | { kind: 'confirming'; orderId: string }
+  | { kind: 'unconfirmed' }
   | { kind: 'done' }
   | { kind: 'error'; message: string; retry: 'claim' | 'pay' | null };
 
-interface RazorpayResponse {
-  razorpay_payment_id: string;
-  razorpay_order_id: string;
-  razorpay_signature: string;
-}
 interface RazorpayInstance {
   open(): void;
 }
@@ -59,12 +61,17 @@ function loadCheckout(): Promise<void> {
 const rupees = (paise: number) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(paise / 100);
 
-async function postJson<T>(url: string, body: unknown): Promise<T> {
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  });
+async function requestJson<T>(url: string, body?: unknown): Promise<T> {
+  const response = await fetch(
+    url,
+    body === undefined
+      ? { cache: 'no-store' }
+      : {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(body),
+        },
+  );
   const json = (await response.json().catch(() => null)) as
     (T & { error?: undefined }) | { error: { code: string; message: string } } | null;
   if (!response.ok || !json || json.error) {
@@ -73,16 +80,58 @@ async function postJson<T>(url: string, body: unknown): Promise<T> {
   return json as T;
 }
 
+interface ClaimCheckout {
+  orderId: string;
+  keyId: string;
+  amount: number;
+  currency: string;
+  cart: CartLine[];
+  issuerName: string;
+  credentialName: string;
+}
+
+const REFUND_REASONS: Record<RefundReason, string> = {
+  already_claimed: 'This credential was already in your vault, so this payment was not needed.',
+  claimed_by_other: 'This credential was claimed before your payment arrived.',
+  token_gone: 'This claim link was withdrawn before your payment arrived.',
+  amount_mismatch: 'The payment did not match the order.',
+  duplicate_payment: 'This order had already been paid.',
+};
+
+/** How often, and for how long, the page asks whether the payment has been confirmed. */
+const POLL_INTERVAL_MS = 2_000;
+const POLL_ATTEMPTS = 60;
+
 export interface ClaimFlowProps {
   token: string;
   view: ClaimView;
   config: FirebaseClientConfig | null;
   signedIn: boolean;
+  /** Whether the server can take payments at all (Razorpay keys and pricing configured). */
+  paymentsReady: boolean;
+  /** Price of the AI enrichment add-on, or `null` when it is not offered. */
+  aiAddOnPaise: number | null;
 }
 
-export function ClaimFlow({ token, view, config, signedIn }: ClaimFlowProps) {
+export function ClaimFlow({
+  token,
+  view,
+  config,
+  signedIn,
+  paymentsReady,
+  aiAddOnPaise,
+}: ClaimFlowProps) {
   const router = useRouter();
   const fee = view.feePaise ?? 0;
+  const [addAi, setAddAi] = useState(false);
+  const total = fee + (addAi && aiAddOnPaise !== null ? aiAddOnPaise : 0);
+  const unmounted = useRef(false);
+  useEffect(
+    () => () => {
+      unmounted.current = true;
+    },
+    [],
+  );
   const [phase, setPhase] = useState<Phase>(() =>
     view.claimedByUser
       ? { kind: 'done' }
@@ -96,27 +145,51 @@ export function ClaimFlow({ token, view, config, signedIn }: ClaimFlowProps) {
   );
   const started = useRef(false);
 
-  async function claim(payment?: { orderId: string; paymentId: string; signature: string }) {
+  async function claim() {
     setPhase({ kind: 'claiming' });
     try {
-      await postJson('/api/claim', { token, ...(payment ? { payment } : {}) });
+      await requestJson('/api/claim', { token });
       setPhase({ kind: 'done' });
     } catch (error) {
       setPhase({ kind: 'error', message: (error as Error).message, retry: 'claim' });
     }
   }
 
+  /** Waits for the server to confirm the capture (webhook or its own check with Razorpay). */
+  async function confirm(orderId: string) {
+    setPhase({ kind: 'confirming', orderId });
+    for (let attempt = 0; attempt < POLL_ATTEMPTS && !unmounted.current; attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+      let status: CheckoutStatus;
+      try {
+        status = await requestJson<CheckoutStatus>(
+          `/api/checkout?orderId=${encodeURIComponent(orderId)}`,
+        );
+      } catch {
+        continue; // A failed poll is not a failed payment; ask again.
+      }
+      if (status.status === 'paid') {
+        setPhase({ kind: 'done' });
+        return;
+      }
+      if (status.status === 'refund_due' || status.status === 'refunded') {
+        const why = status.refundReason ? REFUND_REASONS[status.refundReason] : '';
+        setPhase({
+          kind: 'error',
+          message: `${why} Your payment will be refunded to the account you paid from.`.trim(),
+          retry: null,
+        });
+        return;
+      }
+    }
+    if (!unmounted.current) setPhase({ kind: 'unconfirmed' });
+  }
+
   async function pay() {
     setPhase({ kind: 'paying' });
     try {
-      const order = await postJson<{
-        orderId: string;
-        amount: number;
-        currency: string;
-        keyId: string;
-        issuerName: string;
-        credentialName: string;
-      }>('/api/claim/order', { token });
+      const addOns: ClaimAddOn[] = addAi && aiAddOnPaise !== null ? ['ai_enrichment'] : [];
+      const order = await requestJson<ClaimCheckout>('/api/checkout', { token, addOns });
       await loadCheckout();
       const checkout = new window.Razorpay!({
         key: order.keyId,
@@ -126,12 +199,9 @@ export function ClaimFlow({ token, view, config, signedIn }: ClaimFlowProps) {
         name: order.issuerName,
         description: order.credentialName,
         theme: { color: '#2563eb' },
-        handler: (response: RazorpayResponse) =>
-          void claim({
-            orderId: response.razorpay_order_id,
-            paymentId: response.razorpay_payment_id,
-            signature: response.razorpay_signature,
-          }),
+        // Razorpay calls this once the payment went through on its side. The response's
+        // signature is not used: the server mints only after Razorpay tells IT (webhook).
+        handler: () => void confirm(order.orderId),
         modal: { ondismiss: () => setPhase({ kind: 'pay' }) },
       });
       checkout.open();
@@ -193,21 +263,90 @@ export function ClaimFlow({ token, view, config, signedIn }: ClaimFlowProps) {
     );
   }
 
-  if (phase.kind === 'claiming' || phase.kind === 'paying') {
+  if (phase.kind === 'claiming' || phase.kind === 'paying' || phase.kind === 'confirming') {
     return (
-      <p className="flex items-center justify-center gap-2 py-6 text-sm" role="status">
+      <p
+        className="flex items-center justify-center gap-2 py-6 text-sm"
+        role="status"
+        data-testid={`claim-${phase.kind}`}
+      >
         <LoaderCircle className="size-5 animate-spin" aria-hidden />
-        {phase.kind === 'paying' ? 'Opening secure payment…' : 'Adding to your vault…'}
+        {phase.kind === 'paying'
+          ? 'Opening secure payment…'
+          : phase.kind === 'confirming'
+            ? 'Confirming your payment…'
+            : 'Adding to your vault…'}
       </p>
     );
   }
 
+  if (phase.kind === 'unconfirmed') {
+    return (
+      <div className="flex flex-col gap-3 text-center" data-testid="claim-unconfirmed">
+        <p className="text-sm text-neutral-600 dark:text-neutral-400">
+          We have not received confirmation of your payment yet. This can take a few minutes; the
+          credential will appear in your vault as soon as it arrives. If the payment does not go
+          through, any amount taken is refunded automatically.
+        </p>
+        <Link
+          href="/dashboard/vault"
+          className={`${button} border border-neutral-300 dark:border-neutral-700`}
+        >
+          <Wallet className="size-5" aria-hidden />
+          Go to my vault
+        </Link>
+      </div>
+    );
+  }
+
   if (phase.kind === 'pay') {
+    if (!view.payable || !paymentsReady) {
+      return (
+        <p
+          role="alert"
+          className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-100"
+          data-testid="claim-not-payable"
+        >
+          {view.issuerName} charges {rupees(fee)} for this credential, but online payment is not
+          available for it yet. Please contact {view.issuerName}.
+        </p>
+      );
+    }
     return (
       <div className="flex flex-col gap-3" data-testid="claim-pay">
-        <p className="text-sm text-neutral-600 dark:text-neutral-400">
-          {view.issuerName} charges {rupees(fee)} to issue this credential. Pay securely with UPI,
-          card or net banking.
+        <dl className="flex flex-col gap-2 rounded-xl border border-neutral-200 p-3 text-sm dark:border-neutral-800">
+          <div className="flex justify-between gap-3">
+            <dt className="text-neutral-600 dark:text-neutral-400">{view.credentialName}</dt>
+            <dd className="tabular-nums">{rupees(fee)}</dd>
+          </div>
+          {aiAddOnPaise !== null && (
+            <div className="flex items-center justify-between gap-3">
+              <dt>
+                <label className="flex min-h-11 cursor-pointer items-center gap-2">
+                  <input
+                    type="checkbox"
+                    className="size-5 accent-blue-600"
+                    checked={addAi}
+                    onChange={(event) => setAddAi(event.target.checked)}
+                    data-testid="add-on-ai"
+                  />
+                  <Sparkles className="size-4 text-blue-600" aria-hidden />
+                  Add AI enrichment
+                </label>
+              </dt>
+              <dd className="tabular-nums">{rupees(aiAddOnPaise)}</dd>
+            </div>
+          )}
+          <div className="flex justify-between gap-3 border-t border-neutral-200 pt-2 font-semibold dark:border-neutral-800">
+            <dt>Total</dt>
+            <dd className="tabular-nums" data-testid="cart-total">
+              {rupees(total)}
+            </dd>
+          </div>
+        </dl>
+        <p className="text-xs text-neutral-500">
+          Pay securely with UPI, card or net banking. If the credential cannot be added to your
+          vault, you are refunded automatically.
         </p>
         <button
           type="button"
@@ -216,7 +355,7 @@ export function ClaimFlow({ token, view, config, signedIn }: ClaimFlowProps) {
           data-testid="pay-and-claim"
         >
           <CreditCard className="size-5" aria-hidden />
-          Pay {rupees(fee)} and claim
+          Pay {rupees(total)} and claim
         </button>
       </div>
     );

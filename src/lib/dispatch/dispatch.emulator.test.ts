@@ -108,6 +108,25 @@ describe.skipIf(!HAS_EMULATORS)('dispatch, ledger and claim tokens (Firestore em
     });
   });
 
+  it('refuses a claim fee before charging when the institution has no payout account', async () => {
+    const { send } = recorder();
+    await expect(dispatch({ ...request(2), claimFeePaise: 5_000 }, send)).rejects.toMatchObject({
+      code: 'PAYOUT_ACCOUNT_MISSING',
+    });
+    expect(send).not.toHaveBeenCalled();
+    expect(await balance()).toBe(10);
+    expect((await db().collection(COLLECTIONS.claimTokens).get()).size).toBe(0);
+
+    await db()
+      .collection(COLLECTIONS.institutions)
+      .doc('school-a')
+      .update({ razorpayAccountId: 'acc_SchoolA0000001' });
+    await dispatch({ ...request(2), claimFeePaise: 5_000 }, send);
+    expect(send).toHaveBeenCalledOnce();
+    const tokens = await db().collection(COLLECTIONS.claimTokens).get();
+    expect(tokens.docs.map((doc) => doc.get('feePaise'))).toEqual([5_000, 5_000]);
+  });
+
   it('deducts credits BEFORE the provider is called, then refunds failures', async () => {
     const send = vi.fn(async (targets: DispatchTarget<'whatsapp'>[], context) => {
       expect(await balance()).toBe(6);

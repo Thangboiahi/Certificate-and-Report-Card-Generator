@@ -5,7 +5,7 @@ rules_version = '2';
 // Contract shared with src/types/roles.ts — change both together:
 //   custom claims  role ('super_admin' | 'inst_admin' | 'inst_staff'), institutionId
 //   collections    institutions, templates, vault_items; server-only: dispatches, issued_batches,
-//                  claim_tokens
+//                  claim_tokens, claim_orders
 //
 // These rules govern browser access only. Server code using the Admin SDK bypasses them, which
 // is why credit balances and role changes are handled server-side.
@@ -46,14 +46,18 @@ service cloud.firestore {
     // ── institutions/{instId} ─────────────────────────────────────────────────────────────────
     // Readable by its own staff and admin; written only by super admins (and server code).
 
+    // razorpayAccountId (optional): the Razorpay Route Linked Account that receives the
+    // institution's share of claim fees (ADR-028). Set by a super admin after onboarding.
     function validInstitution(d) {
       return d.keys().hasAll(['name', 'adminUid', 'staffUids', 'creditBalance', 'verified'])
-        && d.keys().hasOnly(['name', 'adminUid', 'staffUids', 'creditBalance', 'verified'])
+        && d.keys().hasOnly(['name', 'adminUid', 'staffUids', 'creditBalance', 'verified', 'razorpayAccountId'])
         && d.name is string && d.name.size() > 0 && d.name.size() <= 200
         && (d.adminUid == null || d.adminUid is string)
         && d.staffUids is list
         && d.creditBalance is int && d.creditBalance >= 0
-        && d.verified is bool;
+        && d.verified is bool
+        && (!('razorpayAccountId' in d) || d.razorpayAccountId == null
+            || (d.razorpayAccountId is string && d.razorpayAccountId.matches('acc_[A-Za-z0-9]{6,40}')));
     }
 
     match /institutions/{instId} {
@@ -163,6 +167,14 @@ service cloud.firestore {
       allow read, write: if false;
     }
     match /claim_tokens/{tokenHash} {
+      allow read, write: if false;
+    }
+
+    // ── claim_orders/{razorpayOrderId} ────────────────────────────────────────────────────────
+    // Pay-to-claim escrow ledger (ADR-028): cart, split, payment and refund state. Written only by
+    // the checkout route, the Razorpay webhook and reconciliation (Admin SDK). The payer sees
+    // their order's state through GET /api/checkout, never directly.
+    match /claim_orders/{orderId} {
       allow read, write: if false;
     }
 

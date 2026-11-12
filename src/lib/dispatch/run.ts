@@ -26,6 +26,7 @@ import {
   type WriteBatch,
 } from 'firebase-admin/firestore';
 
+import { isRazorpayId } from '@/lib/razorpayClient';
 import type { TemplateRecordDocument } from '@/lib/template';
 import { hashClaimToken, mintClaimToken, purgeAfterFor } from '@/lib/utils/tokenManager';
 import {
@@ -69,6 +70,7 @@ export type DispatchErrorCode =
   | 'INSTITUTION_NOT_FOUND'
   | 'INSTITUTION_NOT_VERIFIED'
   | 'TEMPLATE_NOT_FOUND'
+  | 'PAYOUT_ACCOUNT_MISSING'
   | 'INSUFFICIENT_CREDITS'
   | 'DISPATCH_IN_PROGRESS'
   | 'IDEMPOTENCY_KEY_REUSED'
@@ -224,6 +226,14 @@ export async function runDispatch<C extends DispatchChannel>(input: {
     const template = templateSnap.data() as TemplateRecordDocument | undefined;
     if (!template || template.institutionId !== institutionId) {
       throw new DispatchError('TEMPLATE_NOT_FOUND', 'Choose one of your institution’s templates.');
+    }
+    // A claim fee is paid out through Razorpay Route (ADR-028): without a Linked Account the
+    // recipients could not pay, so refuse before anything is charged or sent.
+    if (request.claimFeePaise > 0 && !isRazorpayId('account', institution.razorpayAccountId)) {
+      throw new DispatchError(
+        'PAYOUT_ACCOUNT_MISSING',
+        'Your institution cannot charge a claim fee until its payout account is set up.',
+      );
     }
     if (institution.creditBalance < cost) {
       throw new DispatchError('INSUFFICIENT_CREDITS', 'Not enough credits for this dispatch.', {

@@ -1,33 +1,48 @@
 /**
- * Claiming a credential through its link (ADR-027):
+ * Claiming a credential through its link (ADR-027, payments ADR-028):
  *
  *   1. The person signs in passwordlessly with the SAME contact the link was sent to (email link
  *      or phone OTP) — so a forwarded link is useless to anyone else.
  *   2. Free credential → `claimCredential` moves it into their vault at once.
- *      Paid credential → `createClaimOrder` opens a Razorpay order; after Checkout,
- *      `claimCredential` verifies the payment signature and the order, then claims.
+ *      Paid credential → `src/lib/payments/escrow.ts`: a Razorpay order whose capture (webhook,
+ *      or pull reconciliation) mints the vault item. Nothing here takes a payment.
  *
- * One transaction marks the token claimed, creates `vault_items/{tokenId}` and counts the claim on
- * the batch. Claiming twice is harmless: the second call returns the same vault item.
+ * Both paths mint through `mintVaultItem`, inside a transaction that marks the token claimed,
+ * creates `vault_items/{tokenId}` and counts the claim on the batch. Claiming twice is harmless:
+ * the second call returns the same vault item.
  */
 import 'server-only';
 
-import { FieldValue, type DocumentSnapshot, type Firestore } from 'firebase-admin/firestore';
+import {
+  FieldValue,
+  type DocumentReference,
+  type DocumentSnapshot,
+  type Firestore,
+  type Transaction,
+} from 'firebase-admin/firestore';
 
+import { isRazorpayId } from '@/lib/razorpayClient';
 import { hashClaimToken, isTokenExpired } from '@/lib/utils/tokenManager';
 import type { ClaimTokenDocument, IssuedBatchDocument } from '@/types/audit';
-import { COLLECTIONS, type SessionUser, type VaultItemDocument } from '@/types/roles';
+import type { ClaimAddOn } from '@/types/payments';
+import {
+  COLLECTIONS,
+  type InstitutionDocument,
+  type SessionUser,
+  type VaultItemDocument,
+} from '@/types/roles';
 
 import { contactMatches, maskContact, type ContactChannel } from './contact';
-import { createRazorpayOrder, verifyPaymentSignature, type RazorpayConfig } from './razorpay';
 
 const TOKEN_FORMAT = /^[A-Za-z0-9_-]{16,128}$/;
 
 /** Stored claim-token fields beyond the Phase 6 schema. */
 export type StoredClaimToken = ClaimTokenDocument & {
-  /** Claim fee in paise; 0 or absent = free. */
+  /** Claim fee (the cart's Base Fee) in paise; 0 or absent = free. */
   feePaise?: number;
   claimedByUid?: string;
+  /** The Razorpay order that paid for it (paid claims only). */
+  orderId?: string;
 };
 
 export type ClaimErrorCode =
@@ -36,8 +51,9 @@ export type ClaimErrorCode =
   | 'ALREADY_CLAIMED'
   | 'CONTACT_MISMATCH'
   | 'PAYMENT_REQUIRED'
-  | 'PAYMENT_INVALID'
   | 'NOT_PAYABLE'
+  | 'ISSUER_NOT_PAYABLE'
+  | 'ADD_ON_UNAVAILABLE'
   | 'PAYMENTS_NOT_CONFIGURED';
 
 export const CLAIM_ERROR_STATUS: Record<ClaimErrorCode, number> = {
@@ -46,8 +62,9 @@ export const CLAIM_ERROR_STATUS: Record<ClaimErrorCode, number> = {
   ALREADY_CLAIMED: 409,
   CONTACT_MISMATCH: 403,
   PAYMENT_REQUIRED: 402,
-  PAYMENT_INVALID: 402,
   NOT_PAYABLE: 409,
+  ISSUER_NOT_PAYABLE: 409,
+  ADD_ON_UNAVAILABLE: 400,
   PAYMENTS_NOT_CONFIGURED: 503,
 };
 
@@ -69,6 +86,8 @@ export interface ClaimView {
   channel?: ContactChannel;
   maskedContact?: string;
   feePaise?: number;
+  /** For a fee: whether the issuer can receive payments (has a Razorpay Linked Account). */
+  payable?: boolean;
   expiresAt?: number;
   /** For a signed-in visitor: whether their account matches the contact. */
   matchesUser?: boolean;
@@ -78,33 +97,54 @@ export interface ClaimView {
   claimedByUser?: boolean;
 }
 
-interface Loaded {
+/** The issuer behind a token, as payments and the claim page need it. */
+export interface ClaimIssuer {
+  name: string;
+  /** Route Linked Account (`acc_…`) that receives the issuer's share, or `null`. */
+  payoutAccount: string | null;
+}
+
+export interface LoadedClaim {
   tokenId: string;
   token: StoredClaimToken;
   batch: IssuedBatchDocument | undefined;
-  issuerName: string;
+  issuer: ClaimIssuer;
 }
 
-async function issuerNameFor(db: Firestore, token: StoredClaimToken): Promise<string> {
-  if (!token.institutionId) return 'Your issuer';
+async function issuerFor(db: Firestore, token: StoredClaimToken): Promise<ClaimIssuer> {
+  // Micro-Issuers cannot dispatch yet (ADR-024), so every token has an institution today.
+  if (!token.institutionId) return { name: 'Your issuer', payoutAccount: null };
   const snap = await db.collection(COLLECTIONS.institutions).doc(token.institutionId).get();
-  return (snap.get('name') as string | undefined) ?? 'Your issuer';
+  const institution = snap.data() as InstitutionDocument | undefined;
+  return {
+    name: institution?.name ?? 'Your issuer',
+    payoutAccount: isRazorpayId('account', institution?.razorpayAccountId)
+      ? institution.razorpayAccountId
+      : null,
+  };
 }
 
-async function load(db: Firestore, rawToken: string): Promise<Loaded | null> {
+/** Finds a raw token's record, its batch and its issuer; `null` for an unknown token. */
+export async function loadClaim(db: Firestore, rawToken: string): Promise<LoadedClaim | null> {
   if (!TOKEN_FORMAT.test(rawToken)) return null;
   const tokenId = await hashClaimToken(rawToken);
   const snap = await db.collection(COLLECTIONS.claimTokens).doc(tokenId).get();
   if (!snap.exists) return null;
   const token = snap.data() as StoredClaimToken;
-  const batchSnap = await db.collection(COLLECTIONS.issuedBatches).doc(token.batchId).get();
+  const [batchSnap, issuer] = await Promise.all([
+    db.collection(COLLECTIONS.issuedBatches).doc(token.batchId).get(),
+    issuerFor(db, token),
+  ]);
   return {
     tokenId,
     token,
     batch: batchSnap.data() as IssuedBatchDocument | undefined,
-    issuerName: await issuerNameFor(db, token),
+    issuer,
   };
 }
+
+export const credentialNameOf = (loaded: Pick<LoadedClaim, 'batch'>) =>
+  loaded.batch?.templateName ?? 'Credential';
 
 /** Everything the public claim page needs, for a visitor who may or may not be signed in. */
 export async function loadClaimView(
@@ -113,30 +153,40 @@ export async function loadClaimView(
   user: SessionUser | null,
   now = Date.now(),
 ): Promise<ClaimView> {
-  const loaded = await load(db, rawToken);
+  const loaded = await loadClaim(db, rawToken);
   if (!loaded) return { status: 'not_found' };
-  const { token, batch, issuerName } = loaded;
+  const { token, issuer } = loaded;
   const matches = user ? contactMatches(token.channel, token.contact, user) : undefined;
-  const base: ClaimView = {
+  const fee = token.feePaise ?? 0;
+  const view: ClaimView = {
     status: token.claimedAt
       ? 'claimed'
       : isTokenExpired(token.expiresAt, now)
         ? 'expired'
         : 'valid',
-    credentialName: batch?.templateName ?? 'Credential',
-    issuerName,
+    credentialName: credentialNameOf(loaded),
+    issuerName: issuer.name,
     channel: token.channel,
     maskedContact: maskContact(token.channel, token.contact),
-    feePaise: token.feePaise ?? 0,
+    feePaise: fee,
+    payable: fee > 0 && issuer.payoutAccount !== null,
     expiresAt: token.expiresAt.toMillis(),
     matchesUser: matches,
     claimedByUser: Boolean(user && token.claimedByUid === user.uid),
   };
-  if (matches) base.recipientName = token.recipientName;
-  return base;
+  if (matches) view.recipientName = token.recipientName;
+  return view;
 }
 
-function checkClaimable(loaded: Loaded | null, user: SessionUser, now: number): Loaded {
+/**
+ * Refuses a claim (or a checkout) by anyone but the person the link was sent to, and for
+ * expired links or ones someone else claimed. A link the same user already claimed passes.
+ */
+export function checkClaimable(
+  loaded: LoadedClaim | null,
+  user: SessionUser,
+  now: number,
+): LoadedClaim {
   if (!loaded) throw new ClaimError('NOT_FOUND', 'This claim link is not valid.');
   const { token } = loaded;
   if (token.claimedAt && token.claimedByUid !== user.uid) {
@@ -154,65 +204,53 @@ function checkClaimable(loaded: Loaded | null, user: SessionUser, now: number): 
   return loaded;
 }
 
-export interface ClaimOrder {
-  orderId: string;
-  amount: number;
-  currency: string;
-  keyId: string;
-  issuerName: string;
-  credentialName: string;
-}
-
-/** Opens a Razorpay order for a paid credential. Only the matching recipient may. */
-export async function createClaimOrder(input: {
-  db: Firestore;
-  user: SessionUser;
-  rawToken: string;
-  razorpay: RazorpayConfig | null;
-  fetchImpl?: typeof fetch;
-  now?: number;
-}): Promise<ClaimOrder> {
-  const { db, user, razorpay } = input;
-  const loaded = checkClaimable(await load(db, input.rawToken), user, input.now ?? Date.now());
-  const fee = loaded.token.feePaise ?? 0;
-  if (fee <= 0 || loaded.token.claimedAt) {
-    throw new ClaimError('NOT_PAYABLE', 'Nothing to pay for this credential.');
-  }
-  if (!razorpay) {
-    throw new ClaimError('PAYMENTS_NOT_CONFIGURED', 'Payments are not available right now.');
-  }
-  const order = await createRazorpayOrder(
-    razorpay,
-    {
-      amount: fee,
-      receipt: `claim-${loaded.tokenId.slice(0, 32)}`,
-      notes: { tokenId: loaded.tokenId, uid: user.uid },
-    },
-    input.fetchImpl,
-  );
-  await db.collection(COLLECTIONS.claimOrders).doc(order.id).set({
-    tokenId: loaded.tokenId,
-    uid: user.uid,
-    amount: order.amount,
-    currency: order.currency,
-    status: 'created',
-    paymentId: null,
-    createdAt: FieldValue.serverTimestamp(),
+/**
+ * Inside a transaction: creates `vault_items/{tokenId}` for `ownerUid`, marks the token
+ * claimed and counts the claim on its batch. The caller has read `batchSnap` in the same
+ * transaction and checked the token is unclaimed.
+ */
+export function mintVaultItem(
+  transaction: Transaction,
+  input: {
+    db: Firestore;
+    tokenId: string;
+    token: StoredClaimToken;
+    batchSnap: DocumentSnapshot;
+    ownerUid: string;
+    issuerName: string;
+    payment?: { orderId: string; paymentId: string; addOns: ClaimAddOn[] };
+  },
+): DocumentReference {
+  const { db, tokenId, token, batchSnap, payment } = input;
+  const batch = batchSnap.data() as IssuedBatchDocument | undefined;
+  const itemRef = db.collection(COLLECTIONS.vaultItems).doc(tokenId);
+  transaction.create(itemRef, {
+    ownerUid: input.ownerUid,
+    templateId: batch?.templateId ?? 'unknown',
+    issuerId: token.institutionId ?? token.issuerUid,
+    issuerType: token.institutionId ? 'institution' : 'individual',
+    issuedAt: FieldValue.serverTimestamp(),
+    expiresAt: null,
+    status: 'valid',
+    revokedAt: null,
+    credentialName: batch?.templateName ?? 'Credential',
+    issuerName: input.issuerName,
+    recipientName: token.recipientName,
+    batchId: token.batchId,
+    shareId: null,
+    ...(payment
+      ? { orderId: payment.orderId, paymentId: payment.paymentId, addOns: payment.addOns }
+      : {}),
+  } as unknown as VaultItemDocument);
+  transaction.update(db.collection(COLLECTIONS.claimTokens).doc(tokenId), {
+    claimedAt: FieldValue.serverTimestamp(),
+    claimedByUid: input.ownerUid,
+    ...(payment ? { orderId: payment.orderId } : {}),
   });
-  return {
-    orderId: order.id,
-    amount: order.amount,
-    currency: order.currency,
-    keyId: razorpay.keyId,
-    issuerName: loaded.issuerName,
-    credentialName: loaded.batch?.templateName ?? 'Credential',
-  };
-}
-
-export interface PaymentProof {
-  orderId: string;
-  paymentId: string;
-  signature: string;
+  if (batchSnap.exists) {
+    transaction.update(batchSnap.ref, { claimedCount: FieldValue.increment(1) });
+  }
+  return itemRef;
 }
 
 export interface ClaimResult {
@@ -221,46 +259,28 @@ export interface ClaimResult {
   alreadyClaimed: boolean;
 }
 
+/** Claims a FREE credential. A credential with a fee goes through checkout instead. */
 export async function claimCredential(input: {
   db: Firestore;
   user: SessionUser;
   rawToken: string;
-  payment?: PaymentProof;
-  razorpay: RazorpayConfig | null;
   now?: number;
 }): Promise<ClaimResult> {
-  const { db, user, payment } = input;
+  const { db, user } = input;
   const now = input.now ?? Date.now();
-  const loaded = checkClaimable(await load(db, input.rawToken), user, now);
+  const loaded = checkClaimable(await loadClaim(db, input.rawToken), user, now);
   const { tokenId } = loaded;
   if (loaded.token.claimedAt) return { vaultItemId: tokenId, alreadyClaimed: true };
-
-  const fee = loaded.token.feePaise ?? 0;
-  if (fee > 0) {
-    if (!payment) throw new ClaimError('PAYMENT_REQUIRED', 'This credential has a fee.');
-    if (!input.razorpay) {
-      throw new ClaimError('PAYMENTS_NOT_CONFIGURED', 'Payments are not available right now.');
-    }
-    const valid = verifyPaymentSignature(
-      input.razorpay.keySecret,
-      payment.orderId,
-      payment.paymentId,
-      payment.signature,
-    );
-    if (!valid) throw new ClaimError('PAYMENT_INVALID', 'The payment could not be verified.');
+  if ((loaded.token.feePaise ?? 0) > 0) {
+    throw new ClaimError('PAYMENT_REQUIRED', 'This credential has a fee. Pay to claim it.');
   }
 
   const tokenRef = db.collection(COLLECTIONS.claimTokens).doc(tokenId);
   const batchRef = db.collection(COLLECTIONS.issuedBatches).doc(loaded.token.batchId);
-  const itemRef = db.collection(COLLECTIONS.vaultItems).doc(tokenId);
-  const orderRef = payment ? db.collection(COLLECTIONS.claimOrders).doc(payment.orderId) : null;
-
   return db.runTransaction(async (transaction) => {
-    const reads = [tokenRef, batchRef, ...(orderRef ? [orderRef] : [])];
-    const [tokenSnap, batchSnap, orderSnap] = (await transaction.getAll(...reads)) as [
+    const [tokenSnap, batchSnap] = (await transaction.getAll(tokenRef, batchRef)) as [
       DocumentSnapshot,
       DocumentSnapshot,
-      DocumentSnapshot | undefined,
     ];
     const token = tokenSnap.data() as StoredClaimToken | undefined;
     if (!token) throw new ClaimError('NOT_FOUND', 'This claim link is not valid.');
@@ -271,44 +291,17 @@ export async function claimCredential(input: {
     if (isTokenExpired(token.expiresAt, now)) {
       throw new ClaimError('EXPIRED', 'This claim link has expired. Ask the issuer for a new one.');
     }
-    if (fee > 0) {
-      const order = orderSnap?.data();
-      if (
-        !order ||
-        order.tokenId !== tokenId ||
-        order.uid !== user.uid ||
-        order.amount !== fee ||
-        order.status !== 'created'
-      ) {
-        throw new ClaimError('PAYMENT_INVALID', 'The payment does not match this credential.');
-      }
-      transaction.update(orderRef!, {
-        status: 'paid',
-        paymentId: payment!.paymentId,
-        paidAt: FieldValue.serverTimestamp(),
-      });
+    if ((token.feePaise ?? 0) > 0) {
+      throw new ClaimError('PAYMENT_REQUIRED', 'This credential has a fee. Pay to claim it.');
     }
-    const batch = batchSnap.data() as IssuedBatchDocument | undefined;
-    transaction.create(itemRef, {
+    mintVaultItem(transaction, {
+      db,
+      tokenId,
+      token,
+      batchSnap,
       ownerUid: user.uid,
-      templateId: batch?.templateId ?? 'unknown',
-      issuerId: token.institutionId ?? token.issuerUid,
-      issuerType: token.institutionId ? 'institution' : 'individual',
-      issuedAt: FieldValue.serverTimestamp(),
-      expiresAt: null,
-      status: 'valid',
-      revokedAt: null,
-      credentialName: batch?.templateName ?? 'Credential',
-      issuerName: loaded.issuerName,
-      recipientName: token.recipientName,
-      batchId: token.batchId,
-      shareId: null,
-    } as unknown as VaultItemDocument);
-    transaction.update(tokenRef, {
-      claimedAt: FieldValue.serverTimestamp(),
-      claimedByUid: user.uid,
+      issuerName: loaded.issuer.name,
     });
-    if (batchSnap.exists) transaction.update(batchRef, { claimedCount: FieldValue.increment(1) });
     return { vaultItemId: tokenId, alreadyClaimed: false };
   });
 }

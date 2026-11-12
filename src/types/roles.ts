@@ -9,6 +9,7 @@
  * The claim names below are part of a contract shared with `firebase/firestore.rules`.
  * Changing them requires changing the rules in the same commit.
  */
+import type { ClaimAddOn } from './payments';
 
 /** Everyone who can reach the app. A Micro-Issuer is an `individual` issuing under their own UID. */
 export type UserRole = 'guest' | 'individual' | 'inst_staff' | 'inst_admin' | 'super_admin';
@@ -78,7 +79,7 @@ export const COLLECTIONS = {
   issuedBatches: 'issued_batches',
   /** One per claim link, keyed by the token's SHA-256. Holds the recipient until purged. Server-only. */
   claimTokens: 'claim_tokens',
-  /** Razorpay orders for claim fees (Phase 7). Server-only. */
+  /** Pay-to-claim checkouts: cart, escrow split, payment outcome (Phase 8, ADR-028). Server-only. */
   claimOrders: 'claim_orders',
 } as const;
 
@@ -98,6 +99,12 @@ export interface InstitutionSchema {
   creditBalance: number;
   /** Set by a super admin after the institution's identity has been checked. */
   verified: boolean;
+  /**
+   * Razorpay Route Linked Account (`acc_…`) that receives the institution's share of claim fees
+   * (ADR-028). Set by a super admin once Razorpay has onboarded the institution; without it the
+   * institution cannot charge a claim fee.
+   */
+  razorpayAccountId?: string | null;
 }
 
 export type InstitutionDocument = Omit<InstitutionSchema, 'id'>;
@@ -144,6 +151,13 @@ export interface VaultItemSchema {
   batchId?: string;
   /** Unguessable id of the public verification page (`/v/{shareId}`), or `null` when not shared. */
   shareId?: string | null;
+
+  // Set when the claim was paid for (Phase 8, ADR-028).
+  /** Razorpay order and payment that paid the claim fee. */
+  orderId?: string;
+  paymentId?: string;
+  /** Add-ons bought with it, e.g. `ai_enrichment` (fulfilled by Phase 9). */
+  addOns?: ClaimAddOn[];
 }
 
 export type VaultItemDocument = Omit<VaultItemSchema, 'id'>;

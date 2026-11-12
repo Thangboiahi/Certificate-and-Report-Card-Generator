@@ -24,6 +24,14 @@
         { "fieldPath": "batchId", "order": "ASCENDING" },
         { "fieldPath": "claimedAt", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "claim_orders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

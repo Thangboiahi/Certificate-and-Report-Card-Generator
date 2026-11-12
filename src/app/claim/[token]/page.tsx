@@ -3,7 +3,7 @@
  *
  * Shows who issued what (never the recipient's details to a stranger), then hands over to
  * `ClaimFlow`: passwordless sign-in with the contact the link was sent to, then an instant claim
- * (free) or Razorpay Checkout (paid). ADR-027.
+ * (free) or the pay-to-claim checkout (ADR-027, ADR-028).
  */
 import { Award, Clock, ShieldCheck } from 'lucide-react';
 import type { Metadata } from 'next';
@@ -12,6 +12,8 @@ import { Suspense } from 'react';
 import { ClaimFlow } from '@/components/claim/ClaimFlow';
 import { getSessionUser } from '@/lib/auth/session';
 import { loadClaimView, type ClaimView } from '@/lib/claim/claim';
+import { pricingFromEnv, type PricingPolicy } from '@/lib/payments/pricing';
+import { razorpayConfigFromEnv } from '@/lib/razorpayClient';
 import { adminFirestore } from '@/lib/server/firebase-admin';
 import { firebaseClientConfig } from '@/lib/server/firebase-client-config';
 
@@ -28,6 +30,19 @@ const DATE = new Intl.DateTimeFormat('en-IN', {
   year: 'numeric',
   timeZone: 'Asia/Kolkata',
 });
+
+/** The pricing in force, or `null` when payments cannot be taken (keys or pricing missing). */
+function paymentPricing(): PricingPolicy | null {
+  if (!razorpayConfigFromEnv()) return null;
+  try {
+    return pricingFromEnv();
+  } catch (error) {
+    console.error(
+      JSON.stringify({ severity: 'ERROR', message: 'pricing misconfigured', cause: String(error) }),
+    );
+    return null;
+  }
+}
 
 function Notice({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -74,6 +89,7 @@ async function Claim({ params }: { params: Promise<{ token: string }> }) {
     );
   }
 
+  const pricing = paymentPricing();
   return (
     <div className="flex flex-col gap-6">
       <header className="flex flex-col items-center gap-3 text-center">
@@ -99,6 +115,8 @@ async function Claim({ params }: { params: Promise<{ token: string }> }) {
         view={view}
         config={firebaseClientConfig()}
         signedIn={user !== null && user.role !== 'guest'}
+        paymentsReady={pricing !== null}
+        aiAddOnPaise={pricing?.aiEnrichmentPaise ?? null}
       />
       <p className="flex items-center justify-center gap-1.5 text-xs text-neutral-500">
         <ShieldCheck className="size-3.5" aria-hidden />

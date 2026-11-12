@@ -170,6 +170,44 @@ describe.skipIf(!HAS_EMULATORS)('firestore.rules', () => {
       await assertSucceeds(deleteDoc(doc(superAdmin(), 'institutions/B')));
     });
 
+    it('accepts a Razorpay Linked Account id from super admins only, in the right format', async () => {
+      await assertSucceeds(
+        updateDoc(doc(superAdmin(), 'institutions/A'), { razorpayAccountId: 'acc_IRQWUleX4BqvYn' }),
+      );
+      await assertSucceeds(
+        updateDoc(doc(superAdmin(), 'institutions/A'), { razorpayAccountId: null }),
+      );
+      await assertSucceeds(
+        setDoc(doc(superAdmin(), 'institutions/F'), {
+          ...institution({ adminUid: null, staffUids: [] }),
+          razorpayAccountId: 'acc_IROu8Nod6PXPtZ',
+        }),
+      );
+      for (const bad of [
+        'IRQWUleX4BqvYn',
+        'acc_',
+        'acc_short',
+        'acc_IRQWUleX4BqvYn ',
+        'pay_IRQWUleX4BqvYn',
+        42,
+      ]) {
+        await assertFails(
+          updateDoc(doc(superAdmin(), 'institutions/A'), { razorpayAccountId: bad }),
+        );
+      }
+      // Redirecting the institution's payouts to another account is a super-admin action only.
+      await assertFails(
+        updateDoc(doc(adminOf('A'), 'institutions/A'), {
+          razorpayAccountId: 'acc_AttackerAcc0001',
+        }),
+      );
+      await assertFails(
+        updateDoc(doc(staffOf('A'), 'institutions/A'), {
+          razorpayAccountId: 'acc_AttackerAcc0001',
+        }),
+      );
+    });
+
     it('cannot be changed by its own admin or staff — not even the credit balance', async () => {
       await assertFails(updateDoc(doc(adminOf('A'), 'institutions/A'), { creditBalance: 999999 }));
       await assertFails(updateDoc(doc(adminOf('A'), 'institutions/A'), { name: 'Renamed' }));
@@ -436,6 +474,23 @@ describe.skipIf(!HAS_EMULATORS)('firestore.rules', () => {
         await assertFails(updateDoc(doc(db, 'claim_tokens/t-1'), { claimedAt: null }));
         await assertFails(setDoc(doc(db, 'claim_tokens/t-2'), { batchId: 'b-1' }));
         await assertFails(deleteDoc(doc(db, 'claim_tokens/t-1')));
+      }
+    });
+
+    it('pay-to-claim orders are closed to every client, including their payer', async () => {
+      await seed('claim_orders/order_JJCYnu3hipocHz', {
+        uid: 'bob',
+        tokenId: 't-1',
+        status: 'created',
+        amount: 2000,
+      });
+      for (const db of [individual('bob'), adminOf('A'), staffOf('A'), superAdmin(), signedOut()]) {
+        await assertFails(getDoc(doc(db, 'claim_orders/order_JJCYnu3hipocHz')));
+        await assertFails(
+          updateDoc(doc(db, 'claim_orders/order_JJCYnu3hipocHz'), { status: 'paid' }),
+        );
+        await assertFails(setDoc(doc(db, 'claim_orders/order_Forged00000001'), { uid: 'bob' }));
+        await assertFails(deleteDoc(doc(db, 'claim_orders/order_JJCYnu3hipocHz')));
       }
     });
 
