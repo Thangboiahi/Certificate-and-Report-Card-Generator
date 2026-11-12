@@ -5,6 +5,36 @@ was verified, and what is left open. The line-by-line history is in git; this fi
 
 ---
 
+## 2026-11-12 — Session 20: Phase 11, global app shell and state cleanup
+
+**Built.** (ADR-032)
+
+- `/dashboard/*` layout with `AppHeader`: Avatar menu (identity, role, editor link) and a working **Sign out**
+  (Firebase `signOut()` -> `DELETE /api/auth/session` -> `/login`).
+- `/editor` opens at an upload gateway instead of the hard-coded sample: PDF/PNG/JPG template plus optional CSV
+  (`EditorGateway`, `UniversalUploadZone` kind `'template'`, `imageToPdf` in the engine, `buildStarterTemplate`). "Back"
+  clears the store. The title is the template's file name. A CSV can be added or replaced inside the editor. The sample
+  remains as an explicit button. `addPlaceholders` added to the store.
+- Global toasts: Sonner `Toaster`, `GlobalErrorToasts`, `app/error.tsx`, `notifyError`; wired into sign-out, uploads, test PDF,
+  AI Magic, Smart Audit.
+- New dependencies: `@radix-ui/react-avatar`, `@radix-ui/react-dropdown-menu`, `sonner` (exact pins).
+
+**Verified.** `npm run typecheck`, `npm run lint` clean; `npm test` (594 tests, 39 skipped as before: poppler/emulator);
+`npm run build` succeeds. In the dev server with a real browser: gateway shows first, no sample; a PDF upload opens the editor
+titled by file name with both pages rendered; a PNG becomes a one-page template; a corrupt PDF stays on the gateway with an
+error toast; a CSV (in the gateway and inside the editor) loads rows and adds one field per column; "Test PDF" succeeds from
+an uploaded template; Back returns to the gateway. The header was checked on a temporary page (since deleted) with a fake user:
+the menu renders, Sign out sends `DELETE /api/auth/session` (204) and lands on `/login`.
+**Not verified.** The header on the real `/dashboard/*` pages with a real session (no sign-in was possible in this session);
+that a protected URL redirects to `/login` after sign-out and `scripts/e2e-auth.mjs` has no sign-out check yet (LOCAL_TODO 1 test
+item); `scripts/e2e-editor.mjs` and `scripts/e2e-ai.mjs` were edited to click "Try the sample certificate" first but not run
+(Playwright is not installed in this worktree). Toast text could collide with strict text locators in `e2e-ai.mjs`.
+**Learned.** `npx prettier --write src` on this Windows checkout rewrote line endings in every file (autocrlf); run Prettier
+only on the files you changed.
+**Open.** LOCAL_TODO items 3 and 4 (live Kanban, Vault indexes); sign-out e2e; template font choice for Indic scripts.
+
+---
+
 ## 2026-11-12 — Session 19: Phase 10 `/login` smoke test passed
 
 **Ran.** `npm run dev` (Next 16.4.6, ready in ~0.3s, `Environments: .env.local`), then `GET /login` → 200.

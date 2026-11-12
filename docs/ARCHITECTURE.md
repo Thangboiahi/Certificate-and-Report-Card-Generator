@@ -188,6 +188,18 @@ MobileEditor ── per page: <div aspect-ratio=w/h, container-type=inline-size>
   reproduced; `/editor`'s "Test PDF" runs the real worker on the previewed row.
 - ADR-022.
 
+## App shell and editor entry (Phase 11)
+
+- `src/app/dashboard/layout.tsx` renders `AppHeader` (Avatar menu, Sign out) above every `/dashboard/*` page. The header only
+  displays the session; pages and the proxy still decide access. Sign out: `signOutEverywhere` (`src/lib/firebase.ts`) ->
+  `DELETE /api/auth/session` -> full load of `/login`.
+- `/editor` shows `EditorGateway` while `templateStore.activeTemplate` is `null`. An uploaded PDF is used as is, a PNG/JPG is
+  wrapped by `imageToPdf` (engine); `readPdfPages` gives the page sizes; `buildStarterTemplate` makes the template (one field
+  per CSV column). The editor keeps the background bytes in component state (`EditorSession`); "Test PDF" hands the worker a
+  copy. Nothing is stored. ADR-032.
+- Failures surface as toasts: `Toaster` and `GlobalErrorToasts` in the root layout, `notifyError` (`src/lib/ui/notify.ts`) in
+  components, `src/app/error.tsx` for render errors.
+
 ## Workspaces
 
 `src/app/dashboard/(workspace)/layout.tsx` wraps `/dashboard/vault` and `/dashboard/issue` in

@@ -1,13 +1,13 @@
 # Local TODO — fixes to execute once the local environment is booted
 
 Written 2026-11-12 when cloud development was frozen (see `docs/STATE.md`). These are the mandatory
-usability fixes found during the Phase 10 smoke test. Nothing here has been started. Follow the
+usability fixes found during the Phase 10 smoke test. Items 1 and 2 were done in Phase 11; 3 and 4 have not been started. Follow the
 record-keeping protocol in `CLAUDE.md` (ADR for decisions, DEVLOG/CHANGELOG entries, tests).
 
 Notes in *italics* are what a quick look at the code found while writing this list. They are
 unverified leads, not conclusions: confirm them first.
 
-## 1. Global auth navigation (logout)
+## 1. Global auth navigation (logout) — DONE (Phase 11, ADR-032); the sign-out e2e check is still to do
 
 The app has no logout option.
 
@@ -18,7 +18,7 @@ The app has no logout option.
 - Show the header on protected pages only. Keep `ROUTE_RULES` and `requireRouteAccess` intact (ADR-017).
 - Test: after sign-out a protected URL redirects to `/login`; extend `scripts/e2e-auth.mjs`.
 
-## 2. Editor upload gateway
+## 2. Editor upload gateway — DONE (Phase 11, ADR-032); e2e-editor/e2e-uploads edited but not run
 
 `/editor` is locked into a hardcoded "Sample certificate".
 
