@@ -4,7 +4,8 @@ rules_version = '2';
 //
 // Contract shared with src/types/roles.ts — change both together:
 //   custom claims  role ('super_admin' | 'inst_admin' | 'inst_staff'), institutionId
-//   collections    institutions, templates, vault_items, dispatches (server-only)
+//   collections    institutions, templates, vault_items; server-only: dispatches, issued_batches,
+//                  claim_tokens
 //
 // These rules govern browser access only. Server code using the Admin SDK bypasses them, which
 // is why credit balances and role changes are handled server-side.
@@ -152,6 +153,16 @@ service cloud.firestore {
     // Credit ledger of WhatsApp / email dispatches. Written and read only by server code (Admin
     // SDK), which deducts credits in the same transaction (ADR-024). No client access at all.
     match /dispatches/{dispatchId} {
+      allow read, write: if false;
+    }
+
+    // ── issued_batches/{batchId}, claim_tokens/{tokenHash} ────────────────────────────────────
+    // Audit ledger and time-locked claim tokens (ADR-026). Server-only: the ledger is rendered on
+    // the server, and claim tokens hold recipients' names and contacts until purged.
+    match /issued_batches/{batchId} {
+      allow read, write: if false;
+    }
+    match /claim_tokens/{tokenHash} {
       allow read, write: if false;
     }
 

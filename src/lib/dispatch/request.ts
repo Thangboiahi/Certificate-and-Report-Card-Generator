@@ -3,18 +3,19 @@
  * helpers that turn it into messages. Framework-free: unit-tested in Node.
  *
  *     {
- *       "idempotencyKey": "batch-2026-03-15-class-10",          // same key = same dispatch, never re-sent or re-charged
- *       "targets": [
- *         { "recipientName": "Aarav Sharma", "phone": "98765 43210",
- *           "claimToken": "c1a2b3...", "expiresAt": "2026-12-31T18:29:59Z" }
- *       ]
+ *       "idempotencyKey": "batch-2026-03-15-class-10",   // same key = same dispatch, never re-sent or re-charged
+ *       "templateId": "tpl-certificate",                  // a template of the caller's institution
+ *       "tokenExpiry": "2026-12-31T18:29:59Z",            // when the claim links stop working (≤ 90 days)
+ *       "targets": [{ "recipientName": "Aarav Sharma", "phone": "98765 43210" }]
  *     }
  *
- * The claim link is built on the server from `APP_ORIGIN` + the token, never taken from the
- * request: a compromised staff account cannot use our WhatsApp number or email domain to send
- * links to other sites.
+ * The server mints one claim token per recipient (ADR-026) and builds each link from `APP_ORIGIN`
+ * + token; the request can supply neither, so a compromised staff account cannot use our WhatsApp
+ * number or email domain to send links to other sites.
  */
 import { z } from 'zod';
+
+import { MAX_CLAIM_TTL_DAYS } from '@/types/audit';
 
 export type DispatchChannel = 'whatsapp' | 'email';
 
@@ -24,17 +25,13 @@ export const DISPATCH_CREDIT_COST: Record<DispatchChannel, number> = { whatsapp:
 /** Largest number of recipients in one request (kept within one HTTP request's time budget). */
 export const MAX_DISPATCH_TARGETS = 500;
 
-const CLAIM_TOKEN = /^[A-Za-z0-9_-]{16,128}$/;
-
 /** A name as it may appear inside a WhatsApp template parameter: one line, no runs of spaces. */
 const recipientName = z
   .string()
   .transform((value) => value.replace(/[\s\u0000-\u001F\u007F]+/g, ' ').trim())
   .pipe(z.string().min(1, 'is empty').max(100, 'is longer than 100 characters'));
 
-const claimToken = z.string().regex(CLAIM_TOKEN, 'must be 16–128 letters, digits, - or _');
-
-const expiresAt = z
+const isoDate = z
   .string()
   .refine((value) => !Number.isNaN(Date.parse(value)), 'must be an ISO 8601 date-time');
 
@@ -71,22 +68,34 @@ const email = z
   .toLowerCase()
   .pipe(z.email('is not a valid email address').max(254));
 
-const base = { recipientName, claimToken, expiresAt };
-
 const schemas = {
-  whatsapp: z.object({ ...base, phone }).strict(),
-  email: z.object({ ...base, email }).strict(),
+  whatsapp: z.object({ recipientName, phone }).strict(),
+  email: z.object({ recipientName, email }).strict(),
 };
 
-export type WhatsAppTarget = z.output<typeof schemas.whatsapp>;
-export type EmailTarget = z.output<typeof schemas.email>;
-export type DispatchTarget<C extends DispatchChannel> = C extends 'whatsapp'
-  ? WhatsAppTarget
-  : EmailTarget;
+/** A recipient as requested. */
+export type WhatsAppRecipient = z.output<typeof schemas.whatsapp>;
+export type EmailRecipient = z.output<typeof schemas.email>;
+export type DispatchRecipient<C extends DispatchChannel> = C extends 'whatsapp'
+  ? WhatsAppRecipient
+  : EmailRecipient;
+
+/** What a sender gets: the recipient plus their freshly minted claim token and its expiry. */
+export interface ClaimFields {
+  claimToken: string;
+  /** ISO 8601. */
+  expiresAt: string;
+}
+export type WhatsAppTarget = WhatsAppRecipient & ClaimFields;
+export type EmailTarget = EmailRecipient & ClaimFields;
+export type DispatchTarget<C extends DispatchChannel> = DispatchRecipient<C> & ClaimFields;
 
 export interface DispatchRequest<C extends DispatchChannel = DispatchChannel> {
   idempotencyKey: string;
-  targets: DispatchTarget<C>[];
+  templateId: string;
+  /** ISO 8601; validated to be in the future and within `MAX_CLAIM_TTL_DAYS`. */
+  tokenExpiry: string;
+  targets: DispatchRecipient<C>[];
 }
 
 export type ParseResult<C extends DispatchChannel> =
@@ -101,8 +110,8 @@ function describe(issue: z.core.$ZodIssue): string {
 }
 
 /**
- * Validates a dispatch body. Rejects expired links and duplicate recipients (each would be charged
- * and messaged twice). `now` is injectable for tests.
+ * Validates a dispatch body. Rejects an expiry in the past or too far ahead, and duplicate
+ * recipients (each would be charged and messaged twice). `now` is injectable for tests.
  */
 export function parseDispatchRequest<C extends DispatchChannel>(
   channel: C,
@@ -114,6 +123,8 @@ export function parseDispatchRequest<C extends DispatchChannel>(
       idempotencyKey: z
         .string()
         .regex(/^[A-Za-z0-9._:-]{8,128}$/, 'must be 8–128 letters, digits, . _ : or -'),
+      templateId: z.string().regex(/^[A-Za-z0-9_-]{1,128}$/, 'is not a template id'),
+      tokenExpiry: isoDate,
       targets: z
         .array(schemas[channel])
         .min(1, 'must list at least one recipient')
@@ -123,12 +134,14 @@ export function parseDispatchRequest<C extends DispatchChannel>(
   const parsed = schema.safeParse(body);
   if (!parsed.success) return { ok: false, message: describe(parsed.error.issues[0]!) };
 
-  const targets = parsed.data.targets as DispatchTarget<C>[];
+  const expiry = Date.parse(parsed.data.tokenExpiry);
+  if (expiry <= now) return { ok: false, message: 'tokenExpiry is already in the past.' };
+  if (expiry - now > MAX_CLAIM_TTL_DAYS * 86_400_000) {
+    return { ok: false, message: `tokenExpiry may be at most ${MAX_CLAIM_TTL_DAYS} days ahead.` };
+  }
+  const targets = parsed.data.targets as DispatchRecipient<C>[];
   const seen = new Map<string, number>();
   for (const [index, target] of targets.entries()) {
-    if (Date.parse(target.expiresAt) <= now) {
-      return { ok: false, message: `Recipient ${index + 1}: the claim link has already expired.` };
-    }
     const contact = 'phone' in target ? target.phone : target.email;
     const earlier = seen.get(contact);
     if (earlier !== undefined) {
@@ -139,7 +152,15 @@ export function parseDispatchRequest<C extends DispatchChannel>(
     }
     seen.set(contact, index);
   }
-  return { ok: true, value: { idempotencyKey: parsed.data.idempotencyKey, targets } };
+  return {
+    ok: true,
+    value: {
+      idempotencyKey: parsed.data.idempotencyKey,
+      templateId: parsed.data.templateId,
+      tokenExpiry: new Date(expiry).toISOString(),
+      targets,
+    },
+  };
 }
 
 /** The link a recipient opens to claim the credential (and whose QR the claim page shows). */

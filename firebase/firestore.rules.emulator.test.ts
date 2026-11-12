@@ -426,6 +426,19 @@ describe.skipIf(!HAS_EMULATORS)('firestore.rules', () => {
       }
     });
 
+    it('audit ledger and claim tokens are closed to every client too', async () => {
+      await seed('issued_batches/b-1', { institutionId: 'A', issuerUid: 'staff-A' });
+      await seed('claim_tokens/t-1', { batchId: 'b-1', institutionId: 'A', contact: '9198' });
+      for (const db of [adminOf('A'), staffOf('A'), superAdmin(), individual('alice')]) {
+        await assertFails(getDoc(doc(db, 'issued_batches/b-1')));
+        await assertFails(getDoc(doc(db, 'claim_tokens/t-1')));
+        await assertFails(updateDoc(doc(db, 'issued_batches/b-1'), { reissueCount: 0 }));
+        await assertFails(updateDoc(doc(db, 'claim_tokens/t-1'), { claimedAt: null }));
+        await assertFails(setDoc(doc(db, 'claim_tokens/t-2'), { batchId: 'b-1' }));
+        await assertFails(deleteDoc(doc(db, 'claim_tokens/t-1')));
+      }
+    });
+
     it('cannot be used to change credits from the browser', async () => {
       await assertFails(updateDoc(doc(adminOf('A'), 'institutions/A'), { creditBalance: 1000 }));
     });

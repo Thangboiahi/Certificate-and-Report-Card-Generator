@@ -70,6 +70,10 @@ export const COLLECTIONS = {
   vaultItems: 'vault_items',
   /** Dispatch records (credit ledger for WhatsApp / email sends). Server-only. */
   dispatches: 'dispatches',
+  /** One per dispatched batch: the audit ledger (Phase 6). Server-only. */
+  issuedBatches: 'issued_batches',
+  /** One per claim link, keyed by the token's SHA-256. Holds the recipient until purged. Server-only. */
+  claimTokens: 'claim_tokens',
 } as const;
 
 // ───────────────────────────────────────────────────────────────────────────────────────────────
