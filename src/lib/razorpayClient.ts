@@ -43,6 +43,16 @@ export function razorpayConfigFromEnv(
   };
 }
 
+/**
+ * Whether the configured key is Razorpay's test key (`rzp_test_…`) or a live one (`rzp_live_…`).
+ * Anything else is treated as live, so an unrecognised key never shows a "no real money" notice.
+ * The key id itself is public: Checkout needs it in the browser, and the server hands it over with
+ * each order (`/api/checkout`), so the page and the order always use the same key pair.
+ */
+export function razorpayMode(keyId: string): 'test' | 'live' {
+  return keyId.startsWith('rzp_test_') ? 'test' : 'live';
+}
+
 // ── Identifiers ─────────────────────────────────────────────────────────────────────────────────
 
 const ID_PATTERNS = {

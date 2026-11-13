@@ -2,7 +2,7 @@
  * End-to-end check of the vault (Phase 7) on the PRODUCTION build, Auth + Firestore emulated:
  *
  *   - /dashboard/vault in Chromium (phone): lists only the signed-in user's items (not another
- *     user's), "Generate Public Link" creates a link, the public page /v/{id} opens without a
+ *     user's), "Generate Public Link" creates a link, the public page /verify/{id} opens without a
  *     session, "Stop sharing" makes the link stop working;
  *   - POST /api/vault/share refuses someone else's item and signed-out callers.
  *
@@ -161,7 +161,7 @@ try {
     const card = page.locator('[data-item-id="asha-1"]');
     await card.getByRole('button', { name: 'Generate Public Link' }).click();
     const url = await card.locator('[data-testid="vault-share-url"]').inputValue();
-    check(/\/v\/[A-Za-z0-9_-]{43}$/.test(url), 'a public link appears', url);
+    check(/\/verify\/[A-Za-z0-9_-]{43}$/.test(url), 'a public link appears', url);
     await page.screenshot({ path: join(root, 'tests', 'output', 'vault.png') }).catch(() => {});
 
     const anon = await browser.newContext();
@@ -169,8 +169,15 @@ try {
     await publicPage.goto(url);
     const shown = await publicPage.textContent('body');
     check(shown.includes('Class 10 Certificate'), 'public page shows the credential, no session');
-    check(shown.includes('Valid credential'), 'public page says valid');
-    check(shown.includes('verified institution'), 'verified institution is noted');
+    check(shown.includes('Verified') && !shown.includes('REVOKED'), 'public page says verified');
+    check(shown.includes('Verified institution'), 'verified institution is noted');
+    check(
+      (await publicPage.locator('[data-testid="add-to-linkedin"]').count()) === 1,
+      'a valid credential offers Add to LinkedIn',
+    );
+    // Links shared before Phase 13 used /v/{id}: they still arrive.
+    await publicPage.goto(url.replace('/verify/', '/v/'));
+    check(publicPage.url() === url, 'the old /v/ link redirects to /verify/', publicPage.url());
 
     await card.getByRole('button', { name: /Stop sharing/ }).click();
     await card.getByRole('button', { name: 'Generate Public Link' }).waitFor();

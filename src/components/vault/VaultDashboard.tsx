@@ -2,7 +2,7 @@
 
 /**
  * The recipient's vault: a grid of the credentials they own, each with a "Generate Public Link"
- * button that turns on its public verification page (`/v/{shareId}`) and a way to turn it off again
+ * button that turns on its public verification page (`/verify/{shareId}`) and a way to turn it off again
  * (old links then stop working). Ownership is enforced by the server (`POST /api/vault/share`,
  * ADR-027); this component only displays what the server listed and asks for changes.
  */
@@ -28,7 +28,7 @@ const DATE = new Intl.DateTimeFormat('en-IN', {
 });
 
 function shareUrl(shareId: string): string {
-  return new URL(`/v/${shareId}`, window.location.origin).toString();
+  return new URL(`/verify/${shareId}`, window.location.origin).toString();
 }
 
 async function requestShare(itemId: string, enabled: boolean): Promise<string | null> {
@@ -178,12 +178,16 @@ function VaultCard({ item }: { item: VaultItemRow }) {
 export function VaultDashboard({ items }: { items: VaultItemRow[] }) {
   if (items.length === 0) {
     return (
-      <p
-        className="rounded-2xl border border-dashed border-neutral-300 p-6 text-center text-sm text-neutral-500 dark:border-neutral-700"
+      <div
+        className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-neutral-300 px-6 py-12 text-center dark:border-neutral-700"
         data-testid="vault-empty"
       >
-        Certificates issued to you will appear here.
-      </p>
+        <Award className="size-8 text-neutral-300 dark:text-neutral-600" aria-hidden />
+        <p className="font-medium">Your vault is empty</p>
+        <p className="max-w-xs text-sm text-neutral-500">
+          Certificates issued to you will appear here, ready to share with a public link.
+        </p>
+      </div>
     );
   }
   return (

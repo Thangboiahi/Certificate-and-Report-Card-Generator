@@ -1080,3 +1080,122 @@ opened a hard-coded "Sample certificate", and a failed request either did nothin
 **Consequences.** Uploaded templates use only the standard Helvetica font for now: Indic-script data needs a font choice
 in the editor (a later task). Nothing is saved: leaving `/editor` discards the template until template storage exists.
 Fields for CSV columns are a starting layout, not a finished design. AI failures now show both inline and as a toast.
+
+---
+
+## ADR-033 — The Kanban board reads and writes Firestore through the server; refreshed by polling, not a browser listener
+
+**Status:** accepted · 2026-11-12 (Phase 12).
+
+**Context.** The board showed six hard-coded cards and moves were not saved. Phase 12 asked for the `@hello-pangea/dnd`
+board to "subscribe to" live Firestore collections. But the browser holds no Firebase session after sign-in (ADR-027: the
+server's httpOnly session cookie is the only credential), so a client-side `onSnapshot` listener cannot authenticate, and the
+cards hold recipients' names and contacts.
+
+**Decision.**
+
+- **Collection `credential_requests`** (server-only; `allow read, write: if false` in `firestore.rules`, like `dispatches` and
+  `claim_tokens`; rules test extended). Document: `ownerKey`, `stage`, `order`, `recipientName`, `credential`, optional `email`,
+  `phone`, `note`, `createdByUid`, `createdAt`, `updatedAt`.
+- **Whose board.** `ownerKey` is `inst:<institutionId>` for `inst_admin` and `inst_staff` (the whole institution shares one
+  board) and `uid:<uid>` for everyone else (a Micro-Issuer's own board). Every function in `src/lib/crm/requests.ts` derives it
+  from the verified session, never from the request body, so one board cannot reach another's cards.
+- **API `/api/requests`** (`GET` list, `POST` create, `PATCH` move), same-origin, session cookie, signed-in; logic in
+  `src/lib/crm/handler.ts`. Moves run in a Firestore transaction.
+- **Order inside a column** is a number per card (`order`); a drop writes the midpoint between its new neighbours, so a move
+  changes one document. When repeated midpoints exhaust precision the column is respaced inside the same transaction
+  (`src/lib/crm/order.ts`).
+- **No composite index.** Queries use equality filters only (`ownerKey`, optionally `stage`) and sort in memory (at most 500
+  cards), so the board needs no entry in `firestore.indexes.json`.
+- **"Live" means polling.** The server renders the first snapshot; `LiveKanban` re-reads `GET /api/requests` every 15 s and when
+  the tab regains focus, and swaps the board only when the data differs and no card is being dragged or saved. Drags are
+  optimistic and roll back if the save fails (unchanged). Revisit with Server-Sent Events or a custom-token Firestore listener
+  only if staff report stale boards.
+- **Vault index errors.** `src/lib/firestore-errors.ts` recognises Firestore's `FAILED_PRECONDITION` "needs an index" failure and
+  extracts the console link; `IndexErrorAlert` shows it as a button on the vault and board pages. The link is also logged as
+  `indexLink`.
+- **Empty states.** "No active requests" (board) and "Your vault is empty" (vault).
+
+**Consequences.** A move is one HTTP round trip, and colleagues see changes within about 15 s, not instantly. The vault's
+`vault_items` index (`ownerUid` + `issuedAt`) is declared in `firestore.indexes.json` but still has to be built in the live
+project (the alert links to it). Requests are created by hand with "Add request"; there is no recipient-facing way to ask for a
+credential yet, and moving a card to Issued does not issue anything (the issue flow stays in the editor and dispatch).
+
+---
+
+## ADR-034 — Public pages: `/verify/{shareId}` is the verification portal (not the Firestore document id); LinkedIn link built in the browser; no prices until decided
+
+**Status:** accepted · 2026-11-12 (Phase 13).
+
+**Context.** Phase 13 asked for a public homepage and a verification page at `/verify/[id]` that "securely queries Firestore for the
+given credential ID" without a login. A page already existed at `/v/{shareId}` (ADR-027).
+
+**Decision.**
+
+- **The id in the URL is the share id, not the document id.** Looking a credential up by its Firestore document id would show
+  anyone who learns or guesses an id the recipient's name and credential, even if the owner never chose to share it, and would
+  overturn ADR-027 (the owner switches public sharing on and off). So `/verify/{id}` resolves the 256-bit `shareId` only
+  (`findSharedCredential`); an unknown id, a document id and a credential whose owner stopped sharing all look the same. The page is
+  `noindex` with `referrer: no-referrer`, because the id is a capability.
+- **`/v/{shareId}` stays as a permanent redirect** to `/verify/{shareId}`, so links already shared keep working. New links
+  (vault "Generate Public Link", claim responses) use `/verify/`.
+- **Verdicts** (`src/lib/vault/verification.ts`): revoked beats expired beats valid. Valid: green "Verified", issuer, recipient, issue
+  date, a certificate-style preview and the LinkedIn button. Revoked: red `role="alert"` "INVALID / REVOKED" telling the visitor to contact
+  the issuer, with a stamp on the preview and no LinkedIn button. Expired: amber alert, no LinkedIn button.
+- **The preview is drawn from the issuer's record, not the issued PDF.** The platform generates PDFs in the browser and does not keep
+  them, so there is no file to show. The preview says what the record says.
+- **QR codes.** The engine's QR placeholder encodes whatever the template says; the share id does not exist until a recipient claims and
+  shares, so a QR printed at generation time cannot yet point at `/verify/{shareId}`. Open item (needs a decision on pre-minted ids).
+- **LinkedIn** (`src/lib/linkedin.ts`): the standard Add-to-Profile URL (`startTask=CERTIFICATION_NAME`, `name`, `organizationName`,
+  `issueYear`, `issueMonth`, optional expiry, `certUrl`). `certUrl` is the page's own address, read in the browser when the button is
+  pressed, so it is right on any domain. Month and year are in India time. Not sent anywhere by us.
+- **Homepage** (`src/app/page.tsx`): static server page, calls to action to `/login` (institutions) and `/editor` (no sign-in). **No
+  prices are shown**, because pricing is undecided (PLAN E12); plans are described by who they are for.
+
+**Consequences.** A holder who never turned sharing on has nothing to verify at a public address. The homepage copy describes
+WhatsApp/email delivery and AI clean-up as features; both need provider keys (E17, E18, E20) before they work in production.
+
+---
+
+## ADR-035 — QR pre-minting: verification ids minted before generation, stored as unclaimed stubs; the Razorpay key stays server-delivered; the image is configured at run time
+
+**Status:** accepted · 2026-11-12 (Phase 14).
+
+**Context.** A QR code on a printed certificate has to say where to verify it, but a credential only gets a vault item, and a share id
+(ADR-027, ADR-034), when its recipient claims it. So a QR printed at generation time had nothing to point at.
+
+**Decision.**
+
+- **Mint first.** Before a batch is generated, the browser asks `POST /api/verify/mint` for one id per row (`src/lib/verifyClient.ts`, up
+  to 2,500 per request). Each id is 256 random bits, base64url, the same format and generator as claim tokens and share ids, so the
+  existing `/verify/{id}` lookup and its format check are unchanged. (The directive suggested a UUIDv4, 122 bits; a longer, already
+  standard id avoids a second id format.) The server stores `verification_stubs/{id}` (server-only; rules `if false`, rules test):
+  issuer (from the session, never the body), credential name, optional recipient name, status `unclaimed`. The browser puts the id and its
+  address on the row as `verification_id` and `verification_url`; a QR placeholder bound to the template `{{verification_url}}` prints it.
+  **The PDF engine and Web Worker are unchanged and stay network-free (ADR-013)**: they print the columns they are given.
+- **Addresses come from `APP_ORIGIN`** (this request's own origin only when it is unset, i.e. local development), so a QR never points at a
+  host the caller chose.
+- **Linking to claim links.** A dispatch target may carry `verificationId`. The server checks every id is a stub of the caller's own,
+  unclaimed and not linked to another batch, **before charging anything**; the claim token stores it (re-issued tokens copy it); claiming
+  creates the vault item with `shareId` = that id and `mintedShareId`, marks the stub `claimed`, and the printed QR now resolves to the
+  claimed credential. Sharing is on from the claim (the QR is public by construction); the owner can still "Stop sharing", after which the
+  paper QR says "not valid, or no longer shared", and turning sharing back on restores the same id (`mintedShareId`), not a new one.
+- **What a scan shows.** A stub that is still unclaimed shows a blue "Issued, not yet claimed" with issuer, recipient (as printed) and date,
+  no LinkedIn button. A revoked stub shows the red INVALID / REVOKED alert. A claimed stub no longer answers by itself: the vault item does.
+- **Test PDFs never mint.** "Test PDF" fills the QR with `/verify/test-only`, which will not verify. "Generate all (ZIP)" mints only for
+  templates that use the verification columns, keeps the ids in the data rows, and reuses them on the next run.
+- **Razorpay key.** No `NEXT_PUBLIC_RAZORPAY_KEY_ID`. A `NEXT_PUBLIC_` variable is fixed into the build, so it would be absent from an image built
+  without secrets, and it could disagree with `RAZORPAY_KEY_SECRET` (an order created with one key pair is rejected by Checkout opened with
+  another). The key id is public by design, and `/api/checkout` already returns the server's `RAZORPAY_KEY_ID` with each order; the page uses
+  that. New: `razorpayMode(keyId)` and a "Test mode" notice on the pay screen when the key starts with `rzp_test_`. Cart maths is unchanged and was
+  already covered (Base Fee, optional AI add-on, platform split, rounding: `pricing.test.ts`, `escrow.emulator.test.ts`). There is no "volume"
+  component in the cart: ADR-028 prices one claim, not a batch.
+- **Docker.** `next.config.ts` already sets `output: 'standalone'` and a three-stage `Dockerfile` and `.dockerignore` already existed. Kept; changed:
+  `.dockerignore` now excludes `.claude` (agent worktrees hold whole repository copies whose `.ts` files `next build` would type-check), logs,
+  editor folders and any service-account file; the build stage mounts `.next/cache`; the Dockerfile lists the run-time variables. Nothing is
+  configured at build time.
+
+**Consequences.** Unclaimed stubs are never deleted (the paper may outlive any retention period) and minting is open to any signed-in user up
+to 2,500 per call: add a quota before a public launch (risk R11). Guests cannot mint, so a QR made without signing in cannot verify. Revoking an
+unclaimed stub has rules and a verdict but no screen yet. The editor's "Generate all" is new in this phase: it is the first place in the product where
+a whole batch is made from the template editor.

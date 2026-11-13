@@ -5,7 +5,7 @@
  * JPG) and, optionally, the data (CSV). A CSV chosen first is kept and turned into fields when the
  * template arrives. Everything stays in the browser; nothing is uploaded here.
  */
-import { CheckCircle2, FileSpreadsheet, FileText, Sparkles } from 'lucide-react';
+import { CheckCircle2, FileSpreadsheet, FileText, PencilLine, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 
@@ -13,7 +13,11 @@ import { UniversalUploadZone, type ConfirmedUpload } from '@/components/ui/Unive
 import { buildStarterTemplate } from '@/lib/editor/starter-template';
 import type { DataRow, TemplateDefinition } from '@/lib/template';
 import { notifyError } from '@/lib/ui/notify';
+import { cn } from '@/lib/utils/cn';
 import type { ParsedCsv } from '@/lib/utils/csv';
+
+/** The one field a manual-entry template starts with; more are added in the editor. */
+const MANUAL_COLUMNS = ['Name'];
 
 /** What the editor needs besides the store: the background and the fonts the preview loads. */
 export interface EditorSession {
@@ -70,12 +74,15 @@ function templateProblem(cause: unknown): string {
 export function EditorGateway({ onLoaded, onSample }: EditorGatewayProps) {
   const [csv, setCsv] = useState<{ fileName: string; data: ParsedCsv } | null>(null);
   const [busy, setBusy] = useState(false);
+  /** "Skip & enter data manually": no CSV; start with one blank record and a first field. */
+  const [manual, setManual] = useState(false);
 
   async function chooseTemplate(file: File) {
     setBusy(true);
     try {
-      const { pdf, template } = await templateFromFile(file, csv?.data.headers ?? []);
-      onLoaded({ pdf, fontUrls: {} }, template, csv?.data.rows ?? []);
+      const columns = csv ? csv.data.headers : manual ? MANUAL_COLUMNS : [];
+      const { pdf, template } = await templateFromFile(file, columns);
+      onLoaded({ pdf, fontUrls: {} }, template, csv ? csv.data.rows : manual ? [{}] : []);
     } catch (cause) {
       notifyError(cause, templateProblem(cause));
     } finally {
@@ -85,7 +92,15 @@ export function EditorGateway({ onLoaded, onSample }: EditorGatewayProps) {
 
   function onUpload(upload: ConfirmedUpload) {
     if (upload.kind === 'template') void chooseTemplate(upload.file);
-    else if (upload.kind === 'csv') setCsv({ fileName: upload.file.name, data: upload.data });
+    else if (upload.kind === 'csv') {
+      setCsv({ fileName: upload.file.name, data: upload.data });
+      setManual(false);
+    }
+  }
+
+  function skipToManual() {
+    setCsv(null);
+    setManual(true);
   }
 
   return (
@@ -105,6 +120,22 @@ export function EditorGateway({ onLoaded, onSample }: EditorGatewayProps) {
         <h2 id="gateway-template" className="flex items-center gap-2 text-sm font-medium">
           <FileText className="size-4" aria-hidden /> 1. Template
         </h2>
+        {(csv || manual) && !busy && (
+          <p
+            role="status"
+            data-testid="gateway-need-template"
+            className="text-sm text-blue-700 dark:text-blue-400"
+          >
+            {manual
+              ? 'Manual entry is on. Choose a template below to open the editor.'
+              : 'Your data is ready. Choose a template below to open the editor.'}
+          </p>
+        )}
+        {busy && (
+          <p role="status" className="text-sm text-neutral-600 dark:text-neutral-400">
+            Opening your template…
+          </p>
+        )}
         <UniversalUploadZone
           accept={['template']}
           label="Tap to choose your template, or drop it here"
@@ -134,6 +165,22 @@ export function EditorGateway({ onLoaded, onSample }: EditorGatewayProps) {
           disabled={busy}
           onConfirm={onUpload}
         />
+        <button
+          type="button"
+          onClick={skipToManual}
+          disabled={busy}
+          aria-pressed={manual}
+          data-testid="skip-manual"
+          className={cn(
+            'inline-flex min-h-12 items-center justify-center gap-2 rounded-xl px-4 text-sm font-medium disabled:opacity-50',
+            manual
+              ? 'bg-blue-600 text-white'
+              : 'border border-blue-600 text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950',
+          )}
+        >
+          <PencilLine className="size-4" aria-hidden />
+          {manual ? 'Entering data manually' : 'Skip & Enter Data Manually'}
+        </button>
       </section>
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">

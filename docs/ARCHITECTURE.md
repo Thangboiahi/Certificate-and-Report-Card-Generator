@@ -200,6 +200,22 @@ MobileEditor ── per page: <div aspect-ratio=w/h, container-type=inline-size>
 - Failures surface as toasts: `Toaster` and `GlobalErrorToasts` in the root layout, `notifyError` (`src/lib/ui/notify.ts`) in
   components, `src/app/error.tsx` for render errors.
 
+## Public pages (Phase 13)
+
+- `/` (`src/app/page.tsx`): static marketing page; calls to action to `/login` and `/editor`. No prices (ADR-034).
+- `/verify/{shareId}`: the public verification portal, no sign-in. `findSharedCredential` (Admin SDK) looks up the unguessable share id;
+  `verificationState` picks valid, expired or revoked; `VerificationResult` renders the verdict, metadata and a preview; `AddToLinkedIn`
+  opens the Add-to-Profile URL from `src/lib/linkedin.ts`. `/v/{shareId}` redirects here.
+
+## Verification pre-minting (Phase 14)
+
+- `POST /api/verify/mint` (`src/lib/verify/handler.ts`, `stubs.ts`) mints 256-bit ids and stores `verification_stubs/{id}` (`unclaimed`). The editor's
+  "Generate all (ZIP)" calls it through `src/lib/verifyClient.ts` and puts `verification_id` / `verification_url` on each row; "Add verification QR"
+  adds a QR placeholder bound to `{{verification_url}}` (`src/lib/verify/template.ts`). The engine and Worker are unchanged.
+- Dispatch targets may carry `verificationId`; `runDispatch` checks ownership first, claim tokens store it, `mintVaultItem` adopts it as the vault
+  item's `shareId` and marks the stub `claimed`. `findSharedCredential` answers from the vault item if one exists, else from an unclaimed stub.
+- ADR-035. Rules: `verification_stubs` is server-only.
+
 ## Workspaces
 
 `src/app/dashboard/(workspace)/layout.tsx` wraps `/dashboard/vault` and `/dashboard/issue` in
@@ -296,11 +312,20 @@ reviews the rows and applies bulk fixes written in plain language. ADR-029.
   unknown rows, columns and placeholders are skipped and reported.
 - `AI_NOT_CONFIGURED` (503) until `GEMINI_API_KEY` is set. Use is not metered yet.
 
-## CRM board (Phase 5)
+## CRM board (Phases 5 and 12)
 
-`KanbanBoard` (`@hello-pangea/dnd`) shows credential requests in four stages; state logic in
-`src/lib/crm/board.ts`. Mounted with sample requests on `/dashboard/institution` and
-`/dashboard/issue`; moves are not stored yet. ADR-025.
+`KanbanBoard` (`@hello-pangea/dnd`) shows credential requests in four stages; state logic in `src/lib/crm/board.ts`. Since
+Phase 12 (ADR-033) the cards live in the server-only Firestore collection `credential_requests`:
+
+- `RequestsSection` (server component, on `/dashboard/institution` and `/dashboard/issue`) loads the caller's board with the
+  Admin SDK (`src/lib/crm/requests.ts`) and renders `LiveKanban`, or `IndexErrorAlert` if Firestore reports a missing index.
+- `LiveKanban` (client) saves drags with `PATCH /api/requests`, adds cards with `POST`, and re-reads with `GET` every 15 s and on
+  focus. It shows "No active requests" when the board is empty.
+- Board scope comes from the session: `inst:<institutionId>` for institution staff and admins, `uid:<uid>` otherwise.
+- Column order is a per-card number (midpoint inserts, `src/lib/crm/order.ts`); no composite index.
+
+The vault page (`/dashboard/vault`) reads `vault_items` the same way (`listVaultItems`) and shows `IndexErrorAlert` with the Firebase
+Console link when the `ownerUid` + `issuedAt` index is missing.
 
 ## Web Worker
 
@@ -313,8 +338,9 @@ caller-supplied local file → same-origin fetch → proxy with the user's token
 
 `next.config.ts` sets `output: 'standalone'`. The `Dockerfile` (three stages, Node 24 slim,
 non-root user, `PORT=8080`, `HOSTNAME=0.0.0.0`) packages `.next/standalone`.
-**Not yet built or run** — see DEVLOG. The standalone server itself was exercised by
-`scripts/e2e-playground.mjs`.
+**The image has not been built** (no Docker in the agent environments so far). What the final stage copies (`.next/standalone`, `.next/static`, `public`)
+was assembled by hand and run as `node server.js` on `0.0.0.0:8080` (every page, static files and public assets answered; ADR-035, DEVLOG session 23). The
+image is configured entirely at run time; the variables are listed at the top of the `Dockerfile`. `.dockerignore` excludes `.claude` and logs.
 
 Cloud Run notes for when it is deployed:
 

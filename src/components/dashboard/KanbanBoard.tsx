@@ -47,12 +47,20 @@ export interface KanbanBoardProps {
   initialRequests: readonly CredentialRequest[];
   /** Persists a move. A rejected promise rolls the move back. */
   onMove?: (move: RequestMove) => void | Promise<void>;
+  /** True from the moment a card is lifted until its move is saved (or undone). */
+  onBusyChange?: (busy: boolean) => void;
   /** Reference time for "2 hours ago"; pass the server's render time to avoid hydration drift. */
   renderedAt?: number;
   className?: string;
 }
 
-export function KanbanBoard({ initialRequests, onMove, renderedAt, className }: KanbanBoardProps) {
+export function KanbanBoard({
+  initialRequests,
+  onMove,
+  onBusyChange,
+  renderedAt,
+  className,
+}: KanbanBoardProps) {
   const [columns, setColumns] = useState<Columns>(() => toColumns(initialRequests));
   const [error, setError] = useState<string | null>(null);
   // Fixed at mount so server and client render the same relative times.
@@ -60,7 +68,10 @@ export function KanbanBoard({ initialRequests, onMove, renderedAt, className }: 
 
   function handleDragEnd(result: DropResult) {
     const { source, destination, draggableId } = result;
-    if (!destination) return;
+    if (!destination) {
+      onBusyChange?.(false);
+      return;
+    }
     const from = source.droppableId as RequestStage;
     const to = destination.droppableId as RequestStage;
     const previous = columns;
@@ -70,17 +81,23 @@ export function KanbanBoard({ initialRequests, onMove, renderedAt, className }: 
       to,
       toIndex: destination.index,
     });
-    if (!next) return;
+    if (!next) {
+      onBusyChange?.(false);
+      return;
+    }
     setColumns(next);
     setError(null);
-    if (!onMove) return;
-    Promise.resolve(onMove({ id: draggableId, from, to, toIndex: destination.index })).catch(
-      (cause: unknown) => {
+    if (!onMove) {
+      onBusyChange?.(false);
+      return;
+    }
+    Promise.resolve(onMove({ id: draggableId, from, to, toIndex: destination.index }))
+      .catch((cause: unknown) => {
         console.error('Could not save the move', cause);
         setColumns(previous);
         setError('That move could not be saved, so it was undone. Try again.');
-      },
-    );
+      })
+      .finally(() => onBusyChange?.(false));
   }
 
   return (
@@ -93,7 +110,7 @@ export function KanbanBoard({ initialRequests, onMove, renderedAt, className }: 
           {error}
         </p>
       )}
-      <DragDropContext onDragEnd={handleDragEnd}>
+      <DragDropContext onDragStart={() => onBusyChange?.(true)} onDragEnd={handleDragEnd}>
         <div className="-mx-4 flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto px-4 pb-2 lg:mx-0 lg:grid lg:grid-cols-4 lg:overflow-visible lg:px-0">
           {REQUEST_STAGES.map((stage) => (
             <section

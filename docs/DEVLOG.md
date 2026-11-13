@@ -5,6 +5,100 @@ was verified, and what is left open. The line-by-line history is in git; this fi
 
 ---
 
+## 2026-11-12 — Session 23: Phase 14, QR pre-minting, Razorpay check, Docker audit
+
+**Built.** (ADR-035)
+
+- **Pre-minting.** `POST /api/verify/mint` and `verification_stubs` (server-only, rules + rules test); `src/lib/verify/{ids,limits,stubs,handler,template}.ts`;
+  `src/lib/verifyClient.ts` (`premintVerification`, chunked, reuses existing ids); dispatch targets accept `verificationId` (checked before any charge), claim
+  tokens store it, `mintVaultItem` adopts it as `shareId`/`mintedShareId` and marks the stub claimed, `setSharing` restores it; `findSharedCredential` falls back to the stub;
+  the verify page has an "Issued, not yet claimed" state. Editor: "Add verification QR", "Generate all (ZIP)" (progress, cancel, mints only when the template uses the QR), test PDFs
+  use a sample address and never mint.
+- **Razorpay.** `razorpayMode()` and a "Test mode" notice on the pay screen. No `NEXT_PUBLIC_RAZORPAY_KEY_ID` (reasons in ADR-035).
+- **Docker.** `.dockerignore` (`.claude`, logs, `**/node_modules`, key files), build cache mount, run-time variables documented in the `Dockerfile`.
+- **Test config.** `vitest.config.mts` now includes `*.test.tsx`: the Phase 12 `IndexErrorAlert.test.tsx` had never been running. It passes.
+
+**Deviations from the directive.** UUIDv4 -> the existing 256-bit id (one id format). `NEXT_PUBLIC_RAZORPAY_KEY_ID` not added. `next.config` and the Dockerfile already existed.
+The worker was not changed: it must stay network-free (ADR-013), so the browser mints and the engine just prints the row.
+
+**Verified.** `npm run typecheck`, `npm run lint`, `npm test` (598 passed, 39 skipped as before), emulator suite (85 passed: new `stubs.emulator.test.ts` covers minting, ownership,
+refusal before charge, linking, claim adoption, stop/restart sharing, other recipients untouched). Production build against the emulators, signed in, in the browser pane: the sample template
+with a 3-row CSV, "Add verification QR", "Generate all" -> one mint call with the 3 names, 3 ids of 43 characters, a ZIP with 3 PDFs ("Made 3 PDFs."); a second "Generate all" made no
+mint call; a signed-out fetch of an id returned "Issued, not yet claimed" with issuer, recipient and date, no LinkedIn button; a revoked stub showed the red alert. The browser run found a bug
+(the preview was stamped EXPIRED for an unclaimed credential); fixed and covered by `VerificationResult.test.tsx`. The image's last stage was reproduced by hand (`.next/standalone` + `.next/static` +
+`public`, 47 MB; standalone alone 39 MB, no `.env`, tests or `.claude`) and run as `node server.js` with `PORT=8080 HOSTNAME=0.0.0.0`: `/`, `/editor`, `/login`, `/verify/x`, `/playground`, a CSS chunk and
+`/samples/template.pdf` all 200; `POST /api/verify/mint` -> 401 without a session, 403 cross-origin.
+**Not verified.** The Docker image itself: no Docker in this environment. That a phone scanner decodes the QR in the generated PDF (the QR drawing is the engine's, covered by its tests; the address
+put into it was checked at the row level). A real Razorpay test payment (needs `rzp_test_` keys, E13). `scripts/e2e-*.mjs` (no Playwright here). The live project.
+**Learned.** Vitest only ran `*.test.ts`; React component tests need `.test.tsx` in the include (fixed). `permanentRedirect` inside a Suspense-streamed page answers 200 to a non-browser client
+(the redirect is delivered in the stream); browsers follow it.
+**Open.** Mint quota per user before launch (R11). Revoking an unclaimed stub has no screen. Guests cannot mint. Decide whether a held (unsent) template should retain its ids.
+
+---
+
+## 2026-11-12 — Session 22: Phase 13, public homepage and verification portal
+
+**Built.** (ADR-034)
+
+- Homepage `src/app/page.tsx` replaces the milestone placeholder: hero "Issue Verifiable Credentials in Seconds", how it works, features,
+  plans by audience (no prices), calls to action to `/login` and `/editor`.
+- `/verify/[id]` (moved from `/v/[shareId]`): `VerificationResult` with Verified / INVALID / REVOKED / EXPIRED verdicts, metadata and a certificate
+  preview; `verificationState` in `src/lib/vault/verification.ts`; `AddToLinkedIn` with `linkedInAddUrl` in `src/lib/linkedin.ts`. `/v/{id}`
+  permanently redirects. Share links from the vault and the claim route now use `/verify/`.
+- Dashboard layout no longer logs an error while the static shell is built (it was caught `cookies()` rejecting during prerender).
+- `scripts/e2e-vault.mjs` updated: new path, "Verified" text, Add-to-LinkedIn present, old `/v/` link redirects.
+
+**Deviation.** The directive said to query Firestore "for the given credential ID". That would mean the document id; I used the share id
+instead, so a credential is reachable only if its owner turned sharing on (ADR-027). Documented in ADR-034.
+
+**Verified.** `npm run typecheck`, `npm run lint`, `npm test` (577 passed, 39 skipped as before), `npm run build`. A production build served against the Auth and
+Firestore emulators, with four seeded credentials (valid, revoked, expired, not shared), in a signed-out browser: valid shows "Verified", metadata,
+preview and the LinkedIn button; revoked shows the red INVALID / REVOKED alert and no button; expired shows the amber alert and no button; an unknown id,
+a garbage id and the Firestore document ids of a shared and an unshared item all show "We couldn't verify this credential"; `/v/{id}` lands on `/verify/{id}`;
+the LinkedIn button opens `linkedin.com/profile/add` with startTask, name, organizationName, issueYear, issueMonth and a certUrl that is the page's own address;
+the homepage has no horizontal scroll at 375 px and its calls to action point at `/login` and `/editor`.
+**Not verified.** What LinkedIn does with the link (we checked the URL only); `scripts/e2e-vault.mjs` (not run); anything on the live project.
+**Open.** Prices (E12). A QR printed at generation time cannot encode `/verify/{shareId}` because the share id is minted later: decide on pre-minted verification ids.
+The revoked stamp sits over the credential name; fine for now. Contact details for issuers are not stored, so the page says "contact" the issuer by name only.
+
+---
+
+## 2026-11-12 — Session 21: Phase 12, live Kanban and Vault wiring
+
+**Built.** (ADR-033)
+
+- The Kanban reads and writes Firestore: new server-only collection `credential_requests`, `src/lib/crm/requests.ts` (list, create,
+  move in a transaction, board scoped to the institution or the person), `src/lib/crm/order.ts` (midpoint ordering, respace when
+  precision runs out), `/api/requests` (GET, POST, PATCH), `LiveKanban` (saves drags, "Add request" form, refresh every 15 s and on
+  focus, "No active requests" state) and `RequestsSection` on `/dashboard/institution` and `/dashboard/issue`. `sample-requests.ts`
+  is deleted; the Issue page's hard-coded "Sample certificate and report card" link is now a plain "Template editor" link.
+- Vault: it already read real `vault_items`; it now catches `FAILED_PRECONDITION` and shows `IndexErrorAlert` with the exact Firebase
+  Console link (`src/lib/firestore-errors.ts`), and the empty state reads "Your vault is empty".
+- Rules: explicit server-only match for `credential_requests`, with a rules test.
+- `scripts/e2e-dispatch.mjs` now seeds real `credential_requests` documents before each Kanban run and checks that moves persist.
+
+**Decision worth knowing.** The directive said "subscribe to" Firestore. The browser has no Firebase session (ADR-027), so a client
+listener cannot read; the server mediates and the board polls. Details and the way out are in ADR-033.
+
+**Verified.** `npm run typecheck`, `npm run lint`, `npm test` (570 passed, 39 skipped as before), emulator suite run directly with
+`npx firebase emulators:exec --only auth,firestore --project demo-v6 "npx vitest run --config vitest.emulator.config.mts"` (78 passed,
+including `requests.emulator.test.ts` and the new rules test), `npm run build`. Then a production build against the emulators with
+seeded users and cards, driven in the browser pane: the institution board shows only its own cards (another school's card absent;
+PATCH on it returns 404; bad stage returns 400); a PATCH moved a card and it was still there after a reload; "Add request" adds and saves;
+the open board picked up a change made outside it; a user with no data sees "No active requests" and "Your vault is empty"; a vault owner
+sees the seeded credential; the Phase 11 header shows on the real dashboard pages with a real session.
+**Not verified.** A real mouse drag in the pane (synthetic mouse events started a drag but never completed a cross-column drop; pane key
+events did not lift a card), so the drag-and-save path is covered by the route, the emulator tests and the updated, unrun
+`e2e-dispatch.mjs`. The index alert against a real Firestore failure (the emulator does not enforce indexes): its extraction and
+rendering are unit-tested with a message in Firestore's real format. Nothing was run against the live Firebase project.
+**Learned.** `npm run test:emulator` does not work from a Windows shell (the script's single quotes); run the `firebase emulators:exec`
+command above instead. A page in the hidden browser pane reports `visibilityState: "hidden"`, so the board's refresh skips it.
+**Open.** Build the `vault_items` index in the live project (LOCAL_TODO item 4); run `e2e-dispatch.mjs` where Playwright is installed;
+recipient-facing ways to create requests and "Issued" actually issuing; other composite queries (the audit ledger) could use the same
+alert.
+
+---
+
 ## 2026-11-12 — Session 20: Phase 11, global app shell and state cleanup
 
 **Built.** (ADR-032)
@@ -32,6 +126,8 @@ item); `scripts/e2e-editor.mjs` and `scripts/e2e-ai.mjs` were edited to click "T
 **Learned.** `npx prettier --write src` on this Windows checkout rewrote line endings in every file (autocrlf); run Prettier
 only on the files you changed.
 **Open.** LOCAL_TODO items 3 and 4 (live Kanban, Vault indexes); sign-out e2e; template font choice for Indic scripts.
+**Follow-up (handoff check).** Reported: "gateway does not move to the canvas after an upload". Re-tested in the dev server: a PDF template opens the canvas with `MobileEditor` and `PropertyBar` (tapping a field opens the bar), with or without a CSV chosen first. The one case that stays on the gateway is a CSV alone, because the canvas needs a template; the gateway now says "Your data is ready. Choose a template below" and "Opening your template…" so it no longer looks stuck.
+**Follow-up (manual entry).** `/editor` gateway has a "Skip & Enter Data Manually" button: no CSV, one blank record `[{}]`, one starter field `{{Name}}`. In the editor, `ManualEntryPanel` adds fields by name and types values for the previewed row. Canvas already showed `{{column}}` for missing keys (`previewText`); Test PDF now works with no rows (blank record). Verified in the dev server: bypass -> canvas, typing a value, adding `Student_Name` (shows `{{Student_Name}}`), template-only upload with no data, Test PDF ready. Unit tests: 25 pass in `src/lib/editor` and `src/store`. Playwright scripts not run.
 
 ---
 

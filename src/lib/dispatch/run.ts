@@ -27,6 +27,7 @@ import {
 } from 'firebase-admin/firestore';
 
 import { isRazorpayId } from '@/lib/razorpayClient';
+import { assertStubsLinkable, linkStub, StubError } from '@/lib/verify/stubs';
 import type { TemplateRecordDocument } from '@/lib/template';
 import { hashClaimToken, mintClaimToken, purgeAfterFor } from '@/lib/utils/tokenManager';
 import {
@@ -76,7 +77,8 @@ export type DispatchErrorCode =
   | 'IDEMPOTENCY_KEY_REUSED'
   | 'BATCH_NOT_FOUND'
   | 'REISSUE_BLOCKED'
-  | 'NOTHING_TO_REISSUE';
+  | 'NOTHING_TO_REISSUE'
+  | 'VERIFICATION_ID_INVALID';
 
 export class DispatchError extends Error {
   constructor(
@@ -196,6 +198,21 @@ export async function runDispatch<C extends DispatchChannel>(input: {
   const cost = DISPATCH_CREDIT_COST[channel] * request.targets.length;
   const tokenExpiry = new Date(request.tokenExpiry);
 
+  // Verification ids printed on the documents must be this caller's own and unused: refuse before
+  // anything is charged.
+  try {
+    await assertStubsLinkable(
+      db,
+      user,
+      request.targets.map((target) => target.verificationId),
+      id,
+    );
+  } catch (error) {
+    if (error instanceof StubError)
+      throw new DispatchError('VERIFICATION_ID_INVALID', error.message);
+    throw error;
+  }
+
   // 1. Reserve.
   const reserved = await db.runTransaction(async (transaction) => {
     const [institutionSnap, existingSnap, templateSnap] = (await transaction.getAll(
@@ -290,22 +307,26 @@ export async function runDispatch<C extends DispatchChannel>(input: {
     );
     await commitInChunks(
       db,
-      targets.map(
-        ({ recipient, tokenId }) =>
-          (writes) =>
-            writes.create(db.collection(COLLECTIONS.claimTokens).doc(tokenId), {
-              batchId: id,
-              institutionId,
-              issuerUid: user.uid,
-              channel,
-              recipientName: recipient.recipientName,
-              contact: contactOf(recipient),
-              expiresAt: tokenExpiry,
-              purgeAfter: purgeAfterFor(tokenExpiry),
-              claimedAt: null,
-              feePaise: request.claimFeePaise,
-            }),
-      ),
+      targets.flatMap(({ recipient, tokenId }) => [
+        (writes: WriteBatch) =>
+          writes.create(db.collection(COLLECTIONS.claimTokens).doc(tokenId), {
+            batchId: id,
+            institutionId,
+            issuerUid: user.uid,
+            channel,
+            recipientName: recipient.recipientName,
+            contact: contactOf(recipient),
+            expiresAt: tokenExpiry,
+            purgeAfter: purgeAfterFor(tokenExpiry),
+            claimedAt: null,
+            feePaise: request.claimFeePaise,
+            // Claiming adopts the id already printed on the document (ADR-035).
+            ...(recipient.verificationId ? { verificationId: recipient.verificationId } : {}),
+          }),
+        ...(recipient.verificationId
+          ? [(writes: WriteBatch) => linkStub(db, writes, recipient.verificationId!, id)]
+          : []),
+      ]),
     );
     // 3. Send — credits are already deducted.
     results = await send(

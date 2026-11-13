@@ -1,6 +1,6 @@
 /**
  * The recipient's vault (Phase 7, ADR-027): listing their credentials and sharing one through an
- * unguessable public verification link (`/v/{shareId}`). Server-only (Admin SDK); every function
+ * unguessable public verification link (`/verify/{shareId}`). Server-only (Admin SDK); every function
  * checks ownership itself.
  */
 import 'server-only';
@@ -8,6 +8,7 @@ import 'server-only';
 import type { Firestore } from 'firebase-admin/firestore';
 
 import { mintClaimToken } from '@/lib/utils/tokenManager';
+import { findUnclaimedStub } from '@/lib/verify/stubs';
 import {
   COLLECTIONS,
   type IssuerType,
@@ -89,7 +90,9 @@ export async function setSharing(
     }
     if (current) return { shareId: current };
     // 256 bits, base64url — the same generator as claim tokens.
-    const shareId = mintClaimToken();
+    // A credential whose QR code was printed before it was claimed gets that id back, so the
+    // paper keeps working after the owner stops and restarts sharing (ADR-035).
+    const shareId = (snap.get('mintedShareId') as string | undefined) ?? mintClaimToken();
     transaction.update(ref, { shareId });
     return { shareId };
   });
@@ -97,6 +100,8 @@ export async function setSharing(
 
 /** What a public verification page shows. */
 export interface SharedCredential {
+  /** False for a pre-minted id nobody has claimed yet (ADR-035): the issuer's record only. */
+  claimed: boolean;
   credentialName: string;
   issuerName: string;
   issuerType: IssuerType;
@@ -121,7 +126,7 @@ export async function findSharedCredential(
     .limit(1)
     .get();
   const doc = snapshot.docs[0];
-  if (!doc) return null;
+  if (!doc) return findStubCredential(db, shareId);
   const item = doc.data() as Omit<VaultItemSchema, 'id'>;
   let issuerVerified = false;
   if (item.issuerType === 'institution') {
@@ -130,6 +135,7 @@ export async function findSharedCredential(
   }
   const row = toRow(doc.id, item);
   return {
+    claimed: true,
     credentialName: row.credentialName,
     issuerName: row.issuerName,
     issuerType: row.issuerType,
@@ -139,5 +145,29 @@ export async function findSharedCredential(
     issuedAt: row.issuedAt,
     expiresAt: row.expiresAt,
     revokedAt: row.revokedAt,
+  };
+}
+
+/** The "issued, not yet claimed" view of a pre-minted id (ADR-035), or `null`. */
+async function findStubCredential(
+  db: Firestore,
+  shareId: string,
+): Promise<SharedCredential | null> {
+  const stub = await findUnclaimedStub(db, shareId);
+  if (!stub) return null;
+  const created = (stub.createdAt as { toMillis?: () => number } | undefined)?.toMillis?.() ?? 0;
+  const revokedAt =
+    (stub.revokedAt as { toMillis?: () => number } | null | undefined)?.toMillis?.() ?? null;
+  return {
+    claimed: false,
+    credentialName: stub.credentialName,
+    issuerName: stub.issuerName,
+    issuerType: stub.issuerType,
+    issuerVerified: stub.issuerVerified,
+    recipientName: stub.recipientName,
+    status: stub.status === 'revoked' ? 'revoked' : 'valid',
+    issuedAt: created,
+    expiresAt: null,
+    revokedAt,
   };
 }

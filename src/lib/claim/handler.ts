@@ -68,7 +68,7 @@ export async function handleShare(request: Request): Promise<Response> {
     const origin = process.env.APP_ORIGIN?.trim() || new URL(request.url).origin;
     return json(200, {
       shareId,
-      url: shareId ? new URL(`/v/${shareId}`, origin).toString() : null,
+      url: shareId ? new URL(`/verify/${shareId}`, origin).toString() : null,
     });
   } catch (cause) {
     if (cause instanceof VaultError) return error(404, cause.code, cause.message);

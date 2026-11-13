@@ -25,6 +25,10 @@ async function Header() {
       homeHref = postLoginPath(session, null);
     }
   } catch (error) {
+    // While the static shell is built there is no request to read a session from: not an error.
+    if (error instanceof Error && error.message.includes('During prerendering')) {
+      return <AppHeader user={null} config={null} homeHref={homeHref} />;
+    }
     console.error(
       JSON.stringify({
         severity: 'ERROR',

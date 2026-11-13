@@ -494,6 +494,47 @@ describe.skipIf(!HAS_EMULATORS)('firestore.rules', () => {
       }
     });
 
+    it('credential requests (the Kanban) are closed to every client', async () => {
+      await seed('credential_requests/r-1', {
+        ownerKey: 'inst:A',
+        stage: 'new',
+        recipientName: 'Asha',
+      });
+      for (const db of [
+        adminOf('A'),
+        staffOf('A'),
+        superAdmin(),
+        individual('alice'),
+        signedOut(),
+      ]) {
+        await assertFails(getDoc(doc(db, 'credential_requests/r-1')));
+        await assertFails(updateDoc(doc(db, 'credential_requests/r-1'), { stage: 'issued' }));
+        await assertFails(setDoc(doc(db, 'credential_requests/r-2'), { ownerKey: 'inst:A' }));
+        await assertFails(deleteDoc(doc(db, 'credential_requests/r-1')));
+      }
+    });
+
+    it('verification stubs (pre-minted QR ids) are closed to every client', async () => {
+      const id = 'S'.repeat(43);
+      await seed(`verification_stubs/${id}`, {
+        ownerKey: 'inst:A',
+        status: 'unclaimed',
+        recipientName: 'Asha',
+      });
+      for (const db of [
+        adminOf('A'),
+        staffOf('A'),
+        superAdmin(),
+        individual('alice'),
+        signedOut(),
+      ]) {
+        await assertFails(getDoc(doc(db, `verification_stubs/${id}`)));
+        await assertFails(updateDoc(doc(db, `verification_stubs/${id}`), { status: 'claimed' }));
+        await assertFails(setDoc(doc(db, 'verification_stubs/forged'), { ownerKey: 'inst:A' }));
+        await assertFails(deleteDoc(doc(db, `verification_stubs/${id}`)));
+      }
+    });
+
     it('cannot be used to change credits from the browser', async () => {
       await assertFails(updateDoc(doc(adminOf('A'), 'institutions/A'), { creditBalance: 1000 }));
     });

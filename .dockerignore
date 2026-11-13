@@ -2,15 +2,30 @@
 # (tests/ stays in: the type check that runs during `next build` covers the test files.)
 .git
 .github
-node_modules
+
+# Dependencies and build output are produced inside the image, never copied from the host.
+# `**/` also catches the copies inside agent worktrees.
+**/node_modules
 .next
+out
 coverage
 tests/output
 *.tsbuildinfo
 
+# Local tooling: agent worktrees hold whole copies of the repository, and their .ts files would be
+# type-checked by `next build`. Editor settings and emulator logs are noise.
+.claude
+.vscode
+.idea
+.firebase
+*.log
+.DS_Store
+
 # Never bake local secrets into an image; configuration is injected at run time.
 .env*
 !.env.example
+*.pem
+firebase-service-account*.json
 
 # Not needed to build
 docs

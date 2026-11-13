@@ -1,9 +1,8 @@
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
 
-import { KanbanBoard } from '@/components/dashboard/KanbanBoard';
 import { LedgerSection } from '@/components/dashboard/LedgerSection';
-import { sampleRequests } from '@/components/dashboard/sample-requests';
+import { RequestsSection } from '@/components/dashboard/RequestsSection';
 import { requireRouteAccess } from '@/lib/auth/session';
 import { requestTime } from '@/lib/server/request-time';
 
@@ -23,9 +22,7 @@ async function InstitutionHome() {
         Signed in as {user.email ?? user.uid} · {user.role === 'inst_admin' ? 'admin' : 'staff'} of{' '}
         {user.institutionId}
       </p>
-      <h2 className="mt-4 text-sm font-medium text-neutral-500">Credential requests</h2>
-      <p className="text-xs text-neutral-500">Sample requests — moves are not saved yet.</p>
-      <KanbanBoard initialRequests={sampleRequests(renderedAt)} renderedAt={renderedAt} />
+      <RequestsSection user={user} renderedAt={renderedAt} />
       <LedgerSection user={user} renderedAt={renderedAt} />
     </>
   );

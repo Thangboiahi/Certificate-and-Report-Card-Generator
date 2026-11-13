@@ -1,7 +1,7 @@
 # Local TODO — fixes to execute once the local environment is booted
 
 Written 2026-11-12 when cloud development was frozen (see `docs/STATE.md`). These are the mandatory
-usability fixes found during the Phase 10 smoke test. Items 1 and 2 were done in Phase 11; 3 and 4 have not been started. Follow the
+usability fixes found during the Phase 10 smoke test. Items 1 and 2 were done in Phase 11; 3 and 4 were built in Phase 12 (ADR-033) and still need the live steps marked below. Follow the
 record-keeping protocol in `CLAUDE.md` (ADR for decisions, DEVLOG/CHANGELOG entries, tests).
 
 Notes in *italics* are what a quick look at the code found while writing this list. They are
@@ -32,7 +32,7 @@ The app has no logout option.
 - Geometry stays in PDF points; only the store converts (ADR-022). Update `templateStore.test.ts` and run
   `node scripts/e2e-editor.mjs` and `node scripts/e2e-uploads.mjs`.
 
-## 3. Institution dashboard: live wiring
+## 3. Institution dashboard: live wiring — BUILT (Phase 12, ADR-033); `e2e-dispatch.mjs` updated but not run
 
 The Kanban board shows static dummy requests.
 
@@ -43,7 +43,7 @@ The Kanban board shows static dummy requests.
 - Check `/dashboard/issue`: its "Sample certificate and report card" text also looks hardcoded.
 - Test: `scripts/e2e-dispatch.mjs` against the emulators.
 
-## 4. Vault and database indexes
+## 4. Vault and database indexes — BUILT (Phase 12, ADR-033); live index still to build
 
 The Digital Vault fails to load.
 

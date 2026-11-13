@@ -1,8 +1,10 @@
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
 
+import { IndexErrorAlert } from '@/components/dashboard/IndexErrorAlert';
 import { VaultDashboard } from '@/components/vault/VaultDashboard';
 import { requireRouteAccess } from '@/lib/auth/session';
+import { indexErrorOf } from '@/lib/firestore-errors';
 import { adminFirestore } from '@/lib/server/firebase-admin';
 import { listVaultItems } from '@/lib/vault/vault';
 
@@ -14,9 +16,16 @@ async function VaultHome() {
   try {
     items = await listVaultItems(adminFirestore(), user.uid);
   } catch (error) {
+    const missingIndex = indexErrorOf(error);
     console.error(
-      JSON.stringify({ severity: 'ERROR', message: 'vault list', cause: String(error) }),
+      JSON.stringify({
+        severity: 'ERROR',
+        message: missingIndex ? 'vault list: missing Firestore index' : 'vault list',
+        cause: String(error),
+        ...(missingIndex?.link ? { indexLink: missingIndex.link } : {}),
+      }),
     );
+    if (missingIndex) return <IndexErrorAlert error={missingIndex} what="The vault" />;
     return (
       <p role="alert" className="text-sm text-red-700 dark:text-red-400">
         Your vault could not be loaded just now. Please try again.

@@ -48,6 +48,8 @@ describe('preview style', () => {
     expect(previewText(NAME, { 'Student Name': 'आरव शर्मा' })).toBe('आरव शर्मा');
     expect(previewText(NAME, { 'Student Name': '  ' })).toBe('—');
     expect(previewText(NAME, undefined)).toBe('{{Student Name}}');
+    // A blank record (manual entry before anything is typed) also shows the variable name.
+    expect(previewText({ ...NAME, fallbackText: undefined }, {})).toBe('{{Student Name}}');
     expect(
       previewText({ ...NAME, binding: { kind: 'template', template: 'Roll {{Roll}}' } }, undefined),
     ).toBe('Roll {{Roll}}');

@@ -16,6 +16,7 @@
 import { z } from 'zod';
 
 import { normalizePhone } from '@/lib/claim/contact';
+import { VERIFICATION_ID_PATTERN } from '@/lib/verify/ids';
 import { MAX_CLAIM_TTL_DAYS } from '@/types/audit';
 
 export { normalizePhone };
@@ -57,9 +58,15 @@ const email = z
   .toLowerCase()
   .pipe(z.email('is not a valid email address').max(254));
 
+/** The id already printed in this recipient's QR code (ADR-035); the server checks it is the caller's own. */
+const verificationId = z
+  .string()
+  .regex(VERIFICATION_ID_PATTERN, 'is not a verification id')
+  .optional();
+
 const schemas = {
-  whatsapp: z.object({ recipientName, phone }).strict(),
-  email: z.object({ recipientName, email }).strict(),
+  whatsapp: z.object({ recipientName, phone, verificationId }).strict(),
+  email: z.object({ recipientName, email, verificationId }).strict(),
 };
 
 /** A recipient as requested. */
@@ -149,6 +156,18 @@ export function parseDispatchRequest<C extends DispatchChannel>(
       };
     }
     seen.set(contact, index);
+  }
+  const seenIds = new Map<string, number>();
+  for (const [index, target] of targets.entries()) {
+    if (!target.verificationId) continue;
+    const earlier = seenIds.get(target.verificationId);
+    if (earlier !== undefined) {
+      return {
+        ok: false,
+        message: `Recipients ${earlier + 1} and ${index + 1} have the same verification id.`,
+      };
+    }
+    seenIds.set(target.verificationId, index);
   }
   return {
     ok: true,
